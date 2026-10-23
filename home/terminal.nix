@@ -3,9 +3,9 @@
 # Terminal + editors.
 
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
 
-  # The palette, from theme/palettes.nix via `wasisabi.theme`. Catppuccin
+  # The palette, from theme/palettes.nix via `wabisabi.theme`. Catppuccin
   # keeps the themes its apps bundle; sumi is spelled out, once per terminal,
   # from the same 16 colours.
   c = (import ../theme/palettes.nix).${cfg.theme};
@@ -20,7 +20,7 @@ lib.mkIf cfg.enable {
       font-size = 11;
       # Catppuccin is bundled with ghostty; sumi is defined below. HM validates
       # the name at build time either way.
-      theme = if sumi then "wasisabi-sumi" else "Catppuccin Mocha";
+      theme = if sumi then "wabisabi-sumi" else "Catppuccin Mocha";
       background-opacity = 0.95;
       confirm-close-surface = false;
       copy-on-select = "clipboard";
@@ -32,7 +32,7 @@ lib.mkIf cfg.enable {
       shell-integration = "none";
     };
     themes = lib.mkIf sumi {
-      wasisabi-sumi = {
+      wabisabi-sumi = {
         background = "#${c.base}";
         foreground = "#${c.text}";
         cursor-color = "#${c.bright}";

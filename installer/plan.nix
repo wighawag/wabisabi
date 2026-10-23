@@ -15,7 +15,7 @@
 #
 # Keys are layer-qualified: "system:greetd.greeter", "home:terminal". Items
 # with a `kind` are the installer's own questions (identity, disks), which are
-# not wasisabi options and therefore have nothing to read a declaration from.
+# not wabisabi options and therefore have nothing to read a declaration from.
 
 {
   groups = [
@@ -68,7 +68,7 @@
           kind = "text";
           prompt = "Where to put the repo on the new disk";
           default = "";
-          help = "An absolute path, e.g. /home/you/src/my-boxes. Empty: where the config says it lives (the /etc/nixos link a wasisabi config declares), else ~/nixos of the machine's owner.";
+          help = "An absolute path, e.g. /home/you/src/my-boxes. Empty: where the config says it lives (the /etc/nixos link a wabisabi config declares), else ~/nixos of the machine's owner.";
           onlyIf = { key = "install:mode"; equals = "restore"; };
         }
       ];
@@ -76,7 +76,7 @@
 
     {
       title = "Machine identity";
-      # Essential groups are always asked. The rest are wasisabi's own
+      # Essential groups are always asked. The rest are wabisabi's own
       # opinions, which the installer offers to skip in one go: see install.sh.
       essential = true;
       # A restore takes identity, secrets and options from the repo: asking
@@ -88,7 +88,7 @@
           key = "identity:hostname";
           kind = "text";
           prompt = "Hostname";
-          default = "wasisabi";
+          default = "wabisabi";
           help = "The machine's name on the network, and the name of its nixosConfiguration in the flake this installer writes.";
           validate = "hostname";
         }
@@ -157,7 +157,7 @@
           prompt = "Encrypted secrets for your config (recommended)";
           default = "generate";
           values = [ "generate" "import" "skip" ];
-          help = "Your config is a git repo at ~/nixos that can rebuild this machine, and can be pushed anywhere. Secrets in it (your password's hash first) are encrypted with sops to an age key that stays OFF the repo. generate: make a new key now; you will be shown it and asked to save a copy, because with the repo and that key a wiped machine comes back as it was. import: paste the key of a config you already have. skip: set it up later with `wasisabi-secrets init`; the password is then set the classic way and lives only on this machine.";
+          help = "Your config is a git repo at ~/nixos that can rebuild this machine, and can be pushed anywhere. Secrets in it (your password's hash first) are encrypted with sops to an age key that stays OFF the repo. generate: make a new key now; you will be shown it and asked to save a copy, because with the repo and that key a wiped machine comes back as it was. import: paste the key of a config you already have. skip: set it up later with `wabisabi-secrets init`; the password is then set the classic way and lives only on this machine.";
         }
         {
           key = "secrets:ageKey";
@@ -196,7 +196,7 @@
           kind = "strlist";
           prompt = "Early KMS driver for the boot splash";
           default = "";
-          help = "The GPU driver loaded in the initrd, so Plymouth owns the screen from the start instead of falling back to printing the boot log. The installer fills in what it detects on this machine (amdgpu, i915, nouveau, virtio_gpu). This is hardware knowledge, which is why it lands in your config rather than in wasisabi's modules. Leave it empty if you do not want early KMS.";
+          help = "The GPU driver loaded in the initrd, so Plymouth owns the screen from the start instead of falling back to printing the boot log. The installer fills in what it detects on this machine (amdgpu, i915, nouveau, virtio_gpu). This is hardware knowledge, which is why it lands in your config rather than in wabisabi's modules. Leave it empty if you do not want early KMS.";
           emit = { attr = "boot.initrd.kernelModules"; block = "system"; };
         }
       ];
@@ -268,11 +268,11 @@
   ];
 
   skip = {
-    "system:enable" = "The installer is installing wasisabi; asking whether to enable it is not a question.";
+    "system:enable" = "The installer is installing wabisabi; asking whether to enable it is not a question.";
     "home:enable" = "Same: the home layer is the point of installing, and the generated configuration.nix shows the line so it can be removed by hand later.";
     "system:user" = "Not a question: it is the account created under Machine identity, substituted into the template (CHANGEME_USERNAME), so it can never name a different user than the one being created.";
-    "system:secrets.sopsFile" = "Not a question: it is set by the secrets step (`wasisabi-secrets init`), which the installer runs after its own Secrets question, because the file has to exist and be encrypted before the line can point at it.";
-    "system:secrets.ageKeyFile" = "Where the key lives is plumbing, not a preference; the default is where sops-nix documents it and where `wasisabi-secrets` puts it.";
+    "system:secrets.sopsFile" = "Not a question: it is set by the secrets step (`wabisabi-secrets init`), which the installer runs after its own Secrets question, because the file has to exist and be encrypted before the line can point at it.";
+    "system:secrets.ageKeyFile" = "Where the key lives is plumbing, not a preference; the default is where sops-nix documents it and where `wabisabi-secrets` puts it.";
     "system:secrets.ownerPassword" = "Follows from answering the Secrets question at all: an owner who sets secrets up gets a reinstallable password, and one who does not never reaches this option.";
     "system:restore.files" = "Not a question: it is read BY the restore mode, out of a config that already exists, and a fresh install has nothing encrypted to place.";
     "system:agents.guide" = "Follows from the agent being enabled: without it the local model refuses to look at the machine it runs on. It is a seeded file the owner can edit or delete, not a preference to decide before seeing it.";

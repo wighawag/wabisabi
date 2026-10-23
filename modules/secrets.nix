@@ -2,7 +2,7 @@
 
 # The owner's secrets, sops-encrypted in their own flake and decrypted by
 # sops-nix on activation. The sops-nix module itself is imported by
-# `nixosModules.wasisabi` in flake.nix, so the generated flake needs no input
+# `nixosModules.wabisabi` in flake.nix, so the generated flake needs no input
 # of its own for it and the installed machine's lock pins it like the rest.
 #
 # THE MODEL: one age key per machine flake, held in two places. The machine
@@ -16,17 +16,17 @@
 # hostname, which services run) is necessarily in the clear.
 
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
   on = cfg.enable && cfg.secrets.sopsFile != null;
   ownerPassword = on && cfg.secrets.ownerPassword && cfg.user != "";
 in
 lib.mkIf cfg.enable (lib.mkMerge [
   {
     # The tooling is there whether or not secrets are set up yet, because
-    # `wasisabi-secrets init` is how a machine installed without them gets
+    # `wabisabi-secrets init` is how a machine installed without them gets
     # them later.
     environment.systemPackages = [
-      (pkgs.callPackage ../pkgs/wasisabi-secrets/package.nix { })
+      (pkgs.callPackage ../pkgs/wabisabi-secrets/package.nix { })
       pkgs.sops
       pkgs.age
     ];
@@ -53,7 +53,7 @@ lib.mkIf cfg.enable (lib.mkMerge [
     assertions = [
       {
         assertion = !(on && cfg.secrets.ownerPassword) || cfg.user != "";
-        message = "wasisabi.secrets.ownerPassword needs wasisabi.user, to know whose password it is. Set wasisabi.user, or wasisabi.secrets.ownerPassword = false.";
+        message = "wabisabi.secrets.ownerPassword needs wabisabi.user, to know whose password it is. Set wabisabi.user, or wabisabi.secrets.ownerPassword = false.";
       }
     ];
   }

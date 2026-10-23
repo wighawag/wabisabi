@@ -4,7 +4,7 @@
 # User-facing apps and dotfiles live in the home-manager layer (../home).
 
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
 
   noctaliaGreeter = cfg.greetd.enable && cfg.greetd.greeter == "noctalia";
 
@@ -15,7 +15,7 @@ let
   # soon as the old image is garbage-collected. The extension is kept, for
   # loaders that go by it.
   wallpaperExt = let m = builtins.match ".*(\\.[A-Za-z0-9]+)" (toString cfg.wallpaper); in if m == null then "" else lib.head m;
-  wallpaperPath = "/etc/wasisabi/wallpaper${wallpaperExt}";
+  wallpaperPath = "/etc/wabisabi/wallpaper${wallpaperExt}";
 
   # The greeter's look, as the file its own Sync writes: palette, wallpaper,
   # dark mode. SEEDED, not owned (see the tmpfiles rules below), so a user
@@ -93,7 +93,7 @@ lib.mkIf cfg.enable {
 
     # The gnome portal uses Nautilus as its file chooser. We default to
     # Thunar, so route FileChooser at the GTK portal instead. Users who set
-    # `wasisabi.fileManager = "nautilus"` can flip this back on.
+    # `wabisabi.fileManager = "nautilus"` can flip this back on.
     useNautilus = lib.mkDefault false;
   };
 
@@ -139,7 +139,7 @@ lib.mkIf cfg.enable {
   # that has to write it.
   #
   #   greeter.toml  the admin half, which Sync never touches, so it is OURS
-  #                 and rewritten on every boot: only what wasisabi decides
+  #                 and rewritten on every boot: only what wabisabi decides
   #                 (the Noctalia mascot stays off, so the login screen is the
   #                 wallpaper and the form).
   #   sync.toml     palette, wallpaper, dark mode, in the file the greeter's
@@ -161,7 +161,7 @@ lib.mkIf cfg.enable {
     '';
   };
 
-  environment.etc."wasisabi/wallpaper${wallpaperExt}".source = cfg.wallpaper;
+  environment.etc."wabisabi/wallpaper${wallpaperExt}".source = cfg.wallpaper;
 
   services.greetd = lib.mkIf cfg.greetd.enable {
     enable = lib.mkDefault true;

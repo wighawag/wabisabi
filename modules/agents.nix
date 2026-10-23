@@ -5,20 +5,20 @@
   ...
 }:
 
-# THE AGENT LAYER, as a wasisabi machine gets it: the building blocks in
+# THE AGENT LAYER, as a wabisabi machine gets it: the building blocks in
 # ./services switched on and wired to each other, from the handful of
 # distro-level options in ./options.nix (llm, search, agents, anon).
 #
-# Everything is mkDefault, like the rest of wasisabi, so any value a machine
+# Everything is mkDefault, like the rest of wabisabi, so any value a machine
 # sets wins; and every building block remains usable on its own for a machine
 # that wants a different arrangement.
 #
 # THE SHAPE, in one picture:
 #
-#   llama.cpp ── /run/wasisabi-llm/llm.sock ──┬─ owner's pi / wherever  (group)
+#   llama.cpp ── /run/wabisabi-llm/llm.sock ──┬─ owner's pi / wherever  (group)
 #   (no network)                              └─ anon accounts' pi      (group)
 #
-#   SearXNG ──── /run/wasisabi-search/search.sock ── owner's webveil / pi
+#   SearXNG ──── /run/wabisabi-search/search.sock ── owner's webveil / pi
 #   SearXNG per anon account, as that account ── its own Tor circuit
 #
 #   anon accounts: every packet forced through Tor by anonctl, fail-closed;
@@ -30,7 +30,7 @@
 # not IP traffic, so the kernel's forcing never sees it. Access is the socket's
 # group, which this module grants to the owner and to each anon account.
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
   svc = config.nixos-modules;
   wp = config.nixos-modules.pkgs;
   hasUser = cfg.user != "";
@@ -51,7 +51,7 @@ let
   ownerHome = config.users.users.${cfg.user}.home or "/home/${cfg.user}";
 
   # The owner agent's user-global AGENTS.md: where it is and what it may do
-  # (see wasisabi.agents.guide), plus whatever this machine adds.
+  # (see wabisabi.agents.guide), plus whatever this machine adds.
   guideFile = pkgs.writeText "AGENTS.md" (
     builtins.readFile ./agents/AGENTS.md
     + lib.optionalString (cfg.agents.extraGuide != "") ("\n" + cfg.agents.extraGuide)
@@ -70,7 +70,7 @@ let
       f;
   searchBar = cfg.search.enable && cfg.agents.searchFolder != null;
 
-  enrollScript = pkgs.writeShellScript "wasisabi-anon-enroll" ''
+  enrollScript = pkgs.writeShellScript "wabisabi-anon-enroll" ''
     # Idempotent, and self-healing, per declared account:
     #
     #   proven (a marker exists)          nothing to do; reconcile's own timer
@@ -134,7 +134,7 @@ lib.mkIf cfg.enable (
         extensions = {
           memonaut-pi = lib.mkDefault wp.memonaut-pi;
           pi-webveil = lib.mkIf cfg.search.enable (lib.mkDefault wp.pi-webveil);
-          pi-wasisabi-local = lib.mkIf cfg.llm.enable (lib.mkDefault wp.pi-wasisabi-local);
+          pi-wabisabi-local = lib.mkIf cfg.llm.enable (lib.mkDefault wp.pi-wabisabi-local);
         };
         settings = lib.mkIf cfg.llm.enable (
           lib.mkDefault {
@@ -207,7 +207,7 @@ lib.mkIf cfg.enable (
     # ── anonymous accounts ──
     (lib.mkIf cfg.anon.enable {
       # The anon accounts' only way out, so they bring it: the same loopback
-      # client wasisabi.tor.enable configures (nixpkgs' defaults: 127.0.0.1:9050,
+      # client wabisabi.tor.enable configures (nixpkgs' defaults: 127.0.0.1:9050,
       # per-destination circuit isolation), switched on even when that option
       # is off. anonctl additionally isolates each account on its own circuits.
       services.tor = {
@@ -219,10 +219,10 @@ lib.mkIf cfg.enable (
         {
           assertion = config.services.tor.enable && config.services.tor.client.enable;
           message = ''
-            wasisabi.anon.enable needs the Tor client (services.tor.client), and
+            wabisabi.anon.enable needs the Tor client (services.tor.client), and
             something turned it off: it is the endpoint every anon account's
             traffic is forced through. Without it the accounts would be jailed
-            with no way out, which is safe but useless. Turn wasisabi.anon.enable
+            with no way out, which is safe but useless. Turn wabisabi.anon.enable
             off instead.
           '';
         }
@@ -255,7 +255,7 @@ lib.mkIf cfg.enable (
         };
         extensions = {
           memonaut-pi = lib.mkDefault wp.memonaut-pi;
-          pi-wasisabi-local = lib.mkIf cfg.llm.enable (lib.mkDefault wp.pi-wasisabi-local);
+          pi-wabisabi-local = lib.mkIf cfg.llm.enable (lib.mkDefault wp.pi-wabisabi-local);
         };
         # A browser per account, for what web_fetch cannot see (pages that
         # render in the client). It runs AS the account, so its traffic is
@@ -288,7 +288,7 @@ lib.mkIf cfg.enable (
     })
 
     (lib.mkIf (cfg.anon.enable && cfg.anon.autoEnroll) {
-      systemd.services.wasisabi-anon-enroll = {
+      systemd.services.wabisabi-anon-enroll = {
         description = "Enrol and prove the declared anon accounts (anonctl add / verify)";
         # NOT wanted by multi-user.target: `verify` waits on Tor, and a boot
         # must never wait on Tor. The timer below starts it shortly after boot.
@@ -315,13 +315,13 @@ lib.mkIf cfg.enable (
           TimeoutStartSec = "10min";
         };
       };
-      systemd.timers.wasisabi-anon-enroll = {
+      systemd.timers.wabisabi-anon-enroll = {
         description = "Retry proving anon accounts that are not proven yet";
         wantedBy = [ "timers.target" ];
         timerConfig = {
           OnBootSec = "1min";
           OnUnitInactiveSec = "15min";
-          Unit = "wasisabi-anon-enroll.service";
+          Unit = "wabisabi-anon-enroll.service";
         };
       };
     })

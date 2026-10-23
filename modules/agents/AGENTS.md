@@ -6,7 +6,7 @@ So you can help with the computer itself, not only with code: wifi, bluetooth, s
 
 ## The system
 
-- NixOS, with the wasisabi desktop (the niri compositor). The system is declared in a configuration, so files under `/etc` and `/nix/store` are generated: never edit them by hand. A permanent change goes into the user's configuration (usually `~/nixos`, linked from `/etc/nixos`) and is applied with `sudo nixos-rebuild switch`.
+- NixOS, with the wabisabi desktop (the niri compositor). The system is declared in a configuration, so files under `/etc` and `/nix/store` are generated: never edit them by hand. A permanent change goes into the user's configuration (usually `~/nixos`, linked from `/etc/nixos`) and is applied with `sudo nixos-rebuild switch`.
 - A program that is not installed can be used once with `nix shell nixpkgs#<package> -c <command>`, without changing the system.
 - The network is managed by NetworkManager, through `nmcli`.
 

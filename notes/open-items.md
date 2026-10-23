@@ -40,7 +40,7 @@ All of this was checked against a booted demo VM, not just evaluated:
 
 ## Unfinished: the Plymouth splash
 
-`wasisabi.splash.enable` (default true) is implemented and the **quiet boot half works**: kernel params are applied (confirmed on `/proc/cmdline`) and the login screen comes up with no boot text around it.
+`wabisabi.splash.enable` (default true) is implemented and the **quiet boot half works**: kernel params are applied (confirmed on `/proc/cmdline`) and the login screen comes up with no boot text around it.
 
 The **graphical splash does not render inside QEMU**. Plymouth starts correctly (`Started Show Plymouth Boot Screen` in the journal) but falls back to *details mode*, which prints the boot log to the screen. Those `[ OK ]` lines are Plymouth relaying systemd, which is why `systemd.show_status=false` does not silence them.
 
@@ -50,13 +50,13 @@ Next steps, in order:
 
 1. Test on real hardware with the correct DRM driver in `boot.initrd.kernelModules`. This is the normal, well-trodden path and may just work, which would make the VM behaviour a QEMU curiosity rather than a bug.
 2. If it fails there too, verify the ImageDir theory: check whether Plymouth logs a theme-load error, and try a theme whose assets the NixOS module copies into `/etc/plymouth/themes` with relative paths.
-3. Decide whether to set `wasisabi.splash.enable = false` for the demo VM specifically, so the VM boot is honest rather than half-themed.
+3. Decide whether to set `wabisabi.splash.enable = false` for the demo VM specifically, so the VM boot is honest rather than half-themed.
 
 ## Deliberately deferred
 
-- **A compositor option.** `wasisabi.compositor = "niri" | "sway" | ...` was scoped out on purpose. `notes/compositor-alternatives.md` records the evaluation, what Sway/SwayFX/Hyprland would cost, and the exact four things a second backend would have to supply.
+- **A compositor option.** `wabisabi.compositor = "niri" | "sway" | ...` was scoped out on purpose. `notes/compositor-alternatives.md` records the evaluation, what Sway/SwayFX/Hyprland would cost, and the exact four things a second backend would have to supply.
 - **A QML desktop shell.** `programs.dms-shell` (DankMaterialShell) and `programs.noctalia` are both in the pinned nixpkgs and would replace Waybar plus fuzzel plus mako wholesale. Young and fast-moving; not a default yet.
-- **Blur.** niri 26.04 supports `ext-background-effect-v1`, so clients can request it. Not enabled; `wasisabi.animations` is the only eye-candy switch so far.
+- **Blur.** niri 26.04 supports `ext-background-effect-v1`, so clients can request it. Not enabled; `wabisabi.animations` is the only eye-candy switch so far.
 
 ## Traps worth remembering
 

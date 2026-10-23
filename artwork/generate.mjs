@@ -20,8 +20,8 @@ import {ensoSvg, palette} from './enso.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const tmp = join(here, '.tmp');
-const serif = process.env.WASISABI_FONT_SERIF;
-if (!serif) throw new Error('WASISABI_FONT_SERIF is unset: run ./generate.sh, not this file');
+const serif = process.env.WABISABI_FONT_SERIF;
+if (!serif) throw new Error('WABISABI_FONT_SERIF is unset: run ./generate.sh, not this file');
 
 // PNGs without timestamps, or every run "changes" every file.
 const pngOut = ['-depth', '8', '-strip', '-define', 'png:exclude-chunk=date,time,tIME'];
@@ -76,7 +76,7 @@ for (let i = 0; i < END; i++) {
 // The wordmark, set in Fraunces Soft Light like the website's headings.
 execFileSync('magick', [
 	'-background', 'none', '-fill', palette.paper, '-font', serif,
-	'-pointsize', '44', '-density', '72', 'label:wasisabi',
+	'-pointsize', '44', '-density', '72', 'label:wabisabi',
 	'-trim', '+repage', '-bordercolor', 'none', '-border', '4',
 	...pngOut, join(ply, 'watermark.png'),
 ]);

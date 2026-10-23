@@ -4,7 +4,7 @@
 # service you cannot self-host (or run fully locally). No vendor clouds,
 # no proprietary blobs, no accounts required by default.
 
-let cfg = config.wasisabi; in
+let cfg = config.wabisabi; in
 lib.mkIf cfg.enable {
   programs.firefox = lib.mkIf (cfg.browser == "firefox") {
     enable = true;

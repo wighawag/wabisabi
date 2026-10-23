@@ -3,7 +3,7 @@
 #
 # THIS SCRIPT CONTAINS NO CONFIGURATION TEXT, and that is the point. Every
 # line it writes comes either from template/ (which is also what
-# `nix flake new -t github:wighawag/wasisabi` scaffolds by hand) or from the
+# `nix flake new -t github:wighawag/wabisabi` scaffolds by hand) or from the
 # answers, whose names, types and defaults come from the option declarations
 # via installer/questions.nix. There is no second copy of the config to drift.
 #
@@ -18,11 +18,11 @@
 
 set -euo pipefail
 
-QUESTIONS="" ANSWERS="" TEMPLATE="" OUT="" STATE_VERSION="" WASISABI_URL=""
+QUESTIONS="" ANSWERS="" TEMPLATE="" OUT="" STATE_VERSION="" WABISABI_URL=""
 
 # What template/flake.nix says by default, and therefore the only URL that
 # needs no rewriting.
-DEFAULT_URL="github:wighawag/wasisabi"
+DEFAULT_URL="github:wighawag/wabisabi"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
     --template) TEMPLATE="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --state-version) STATE_VERSION="$2"; shift 2 ;;
-    --wasisabi-url) WASISABI_URL="$2"; shift 2 ;;
+    --wabisabi-url) WABISABI_URL="$2"; shift 2 ;;
     *) echo "emit.sh: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
@@ -54,7 +54,7 @@ if [ -z "$HOSTNAME_ANS" ] || [ -z "$USERNAME_ANS" ]; then
 fi
 
 # Validated HERE as well as in install.sh, because this is its own entry point
-# (`wasisabi-emit`) and both values are about to be interpolated into a sed
+# (`wabisabi-emit`) and both values are about to be interpolated into a sed
 # replacement and then into a Nix file. A value containing "/" alone would
 # terminate the s/// command.
 if ! [[ "$HOSTNAME_ANS" =~ ^[[:alnum:]]([[:alnum:]_-]{0,61}[[:alnum:]])?$ ]]; then
@@ -111,15 +111,15 @@ render_block() {
   ' "$QUESTIONS"
 }
 
-# Splice rendered lines between the `# >>> wasisabi:<block>` and
-# `# <<< wasisabi:<block>` markers in template/configuration.nix, keeping the
+# Splice rendered lines between the `# >>> wabisabi:<block>` and
+# `# <<< wabisabi:<block>` markers in template/configuration.nix, keeping the
 # markers and matching the indentation of the opening one.
 splice_block() {
   local block="$1" file="$2" lines="$3"
   awk -v block="$block" -v linesfile="$lines" '
     BEGIN { inblock = 0 }
     {
-      if ($0 ~ ("^[[:space:]]*# >>> wasisabi:" block "$")) {
+      if ($0 ~ ("^[[:space:]]*# >>> wabisabi:" block "$")) {
         print
         match($0, /^[[:space:]]*/)
         indent = substr($0, 1, RLENGTH)
@@ -128,7 +128,7 @@ splice_block() {
         inblock = 1
         next
       }
-      if (inblock && $0 ~ ("^[[:space:]]*# <<< wasisabi:" block "$")) { inblock = 0; print; next }
+      if (inblock && $0 ~ ("^[[:space:]]*# <<< wabisabi:" block "$")) { inblock = 0; print; next }
       if (!inblock) print
     }
     END {
@@ -141,8 +141,8 @@ splice_block() {
 for block in system home; do
   tmp=$(mktemp)
   render_block "$block" > "$tmp"
-  if ! grep -q "# >>> wasisabi:$block\$" "$OUT/configuration.nix"; then
-    echo "emit.sh: template/configuration.nix has no '# >>> wasisabi:$block' marker" >&2
+  if ! grep -q "# >>> wabisabi:$block\$" "$OUT/configuration.nix"; then
+    echo "emit.sh: template/configuration.nix has no '# >>> wabisabi:$block' marker" >&2
     exit 1
   fi
   splice_block "$block" "$OUT/configuration.nix" "$tmp"
@@ -158,22 +158,22 @@ for file in "$OUT/configuration.nix" "$OUT/flake.nix"; do
     "$file"
 done
 
-# Point the flake at whatever wasisabi this medium actually carries. Normally
+# Point the flake at whatever wabisabi this medium actually carries. Normally
 # that is the public URL already in the template and nothing happens here; an
 # installer built from an uncommitted tree pins its own store path instead, so
 # that the installed machine reproduces the tree it came from rather than
 # silently tracking a different one. See installer/lock.nix.
-if [ -n "$WASISABI_URL" ] && [ "$WASISABI_URL" != "$DEFAULT_URL" ]; then
+if [ -n "$WABISABI_URL" ] && [ "$WABISABI_URL" != "$DEFAULT_URL" ]; then
   if ! grep -q "url = \"$DEFAULT_URL\";" "$OUT/flake.nix"; then
-    echo "emit.sh: template/flake.nix no longer declares '$DEFAULT_URL', so the wasisabi input cannot be repointed" >&2
+    echo "emit.sh: template/flake.nix no longer declares '$DEFAULT_URL', so the wabisabi input cannot be repointed" >&2
     exit 1
   fi
-  escaped=${WASISABI_URL//\//\\/}
+  escaped=${WABISABI_URL//\//\\/}
   sed -i "s/url = \"${DEFAULT_URL//\//\\/}\";/url = \"$escaped\";/" "$OUT/flake.nix"
 fi
 
 # The password is deliberately not written into the flake in the clear: its
-# hash goes into the sops-encrypted secrets file (wasisabi-secrets init), or,
+# hash goes into the sops-encrypted secrets file (wabisabi-secrets init), or,
 # without secrets, into the target's /etc/shadow with chpasswd. Either way
 # this file can be pushed to a public repository as it stands.
 python3 - "$OUT/configuration.nix" <<'PYTHON'
@@ -182,8 +182,8 @@ import re, sys
 path = sys.argv[1]
 text = open(path).read()
 replacement = """    # Password: never in this file. With secrets set up (see
-    # wasisabi.secrets below) its hash is in secrets/secrets.yaml, encrypted,
-    # and `wasisabi-secrets password` changes it. Without, it was set at
+    # wabisabi.secrets below) its hash is in secrets/secrets.yaml, encrypted,
+    # and `wabisabi-secrets password` changes it. Without, it was set at
     # install time straight into /etc/shadow and `passwd` changes it.
 """
 text, count = re.subn(

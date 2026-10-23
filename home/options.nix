@@ -4,32 +4,32 @@ let
   # The system layer's value when this home is part of a NixOS config that
   # has one, so a machine is themed from one place; otherwise our own default.
   fromSystem = name: fallback:
-    if osConfig != null && (osConfig.wasisabi.enable or false)
-    then osConfig.wasisabi.${name}
+    if osConfig != null && (osConfig.wabisabi.enable or false)
+    then osConfig.wabisabi.${name}
     else fallback;
 in
 {
-  options.wasisabi = {
-    enable = lib.mkEnableOption "the wasisabi home layer (apps + dotfiles)";
+  options.wabisabi = {
+    enable = lib.mkEnableOption "the wabisabi home layer (apps + dotfiles)";
 
     theme = lib.mkOption {
       type = lib.types.enum (lib.attrNames (import ../theme/palettes.nix));
       default = fromSystem "theme" "sumi";
-      defaultText = lib.literalExpression ''osConfig.wasisabi.theme, or "sumi"'';
+      defaultText = lib.literalExpression ''osConfig.wabisabi.theme, or "sumi"'';
       description = ''
         The palette this home's apps are drawn in (theme/palettes.nix). Follows
-        the system layer's `wasisabi.theme`, so it is normally set there.
+        the system layer's `wabisabi.theme`, so it is normally set there.
       '';
     };
 
     wallpaper = lib.mkOption {
       type = lib.types.path;
       default = fromSystem "wallpaper"
-        "${pkgs.callPackage ../pkgs/wasisabi-artwork/package.nix { }}/share/backgrounds/wasisabi/enso.jpg";
-      defaultText = lib.literalExpression ''osConfig.wasisabi.wallpaper, or the enso'';
+        "${pkgs.callPackage ../pkgs/wabisabi-artwork/package.nix { }}/share/backgrounds/wabisabi/enso.jpg";
+      defaultText = lib.literalExpression ''osConfig.wabisabi.wallpaper, or the enso'';
       description = ''
         The wallpaper of the desktop and the lock screen. Follows the system
-        layer's `wasisabi.wallpaper`, so it is normally set there. Noctalia
+        layer's `wabisabi.wallpaper`, so it is normally set there. Noctalia
         users can also pick one in its settings; that choice is kept.
       '';
     };

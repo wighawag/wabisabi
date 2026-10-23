@@ -4,7 +4,7 @@
 # drivers, filesystems or firmware. Every value is mkDefault so the
 # importing config always wins.
 
-let cfg = config.wasisabi; in
+let cfg = config.wabisabi; in
 lib.mkIf cfg.enable {
   nix.settings = {
     experimental-features = lib.mkDefault [ "nix-command" "flakes" ];
@@ -103,7 +103,7 @@ lib.mkIf cfg.enable {
   # Compressed-RAM swap: safe on any machine, no partition required.
   zramSwap.enable = lib.mkDefault cfg.zram.enable;
 
-  # Binaries built for other distributions (see wasisabi.nixLd). The default
+  # Binaries built for other distributions (see wabisabi.nixLd). The default
   # library set only; add to programs.nix-ld.libraries when a binary names one.
   programs.nix-ld.enable = lib.mkIf cfg.nixLd.enable (lib.mkDefault true);
 

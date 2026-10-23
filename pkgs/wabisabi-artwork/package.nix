@@ -1,13 +1,13 @@
 { lib, stdenvNoCC }:
 
-# wasisabi's artwork: the default wallpaper and the Plymouth theme. The
+# wabisabi's artwork: the default wallpaper and the Plymouth theme. The
 # images are generated and committed under artwork/ (see artwork/README.md);
 # this only installs them where the consumers look.
 #
-#   share/backgrounds/wasisabi/enso.jpg        the default wallpaper
-#   share/plymouth/themes/wasisabi/            the boot splash
+#   share/backgrounds/wabisabi/enso.jpg        the default wallpaper
+#   share/plymouth/themes/wabisabi/            the boot splash
 stdenvNoCC.mkDerivation {
-  pname = "wasisabi-artwork";
+  pname = "wabisabi-artwork";
   version = "0.1.0";
 
   src = lib.fileset.toSource {
@@ -23,10 +23,10 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     runHook preInstall
 
-    install -Dm444 wallpapers/enso.jpg $out/share/backgrounds/wasisabi/enso.jpg
-    install -Dm444 wallpapers/LICENSE $out/share/licenses/wasisabi-artwork/LICENSE
+    install -Dm444 wallpapers/enso.jpg $out/share/backgrounds/wabisabi/enso.jpg
+    install -Dm444 wallpapers/LICENSE $out/share/licenses/wabisabi-artwork/LICENSE
 
-    theme=$out/share/plymouth/themes/wasisabi
+    theme=$out/share/plymouth/themes/wabisabi
     install -Dm444 -t $theme plymouth/*.png
 
     # two-step, the plugin behind plymouth's own "spinner" theme. It shows
@@ -37,9 +37,9 @@ stdenvNoCC.mkDerivation {
     # initrd (modules/boot.nix sets it to Inter). UseEndAnimation: the end
     # animation paints the dry tail that closes the circle, then holds, so the
     # greeter always replaces a finished enso (artwork/generate.mjs).
-    cat > $theme/wasisabi.plymouth <<EOF
+    cat > $theme/wabisabi.plymouth <<EOF
     [Plymouth Theme]
-    Name=wasisabi
+    Name=wabisabi
     Description=An enso, painted as the machine boots
     ModuleName=two-step
 
@@ -85,7 +85,7 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta = {
-    description = "wasisabi's wallpaper and boot splash";
+    description = "wabisabi's wallpaper and boot splash";
     license = lib.licenses.cc0;
     platforms = lib.platforms.all;
   };

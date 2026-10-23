@@ -9,7 +9,7 @@
 # so a terminal opened plain bash and all of it was dead configuration. direnv,
 # eza and bat moved to the system layer with the shell (modules/core.nix).
 
-let cfg = config.wasisabi; in
+let cfg = config.wabisabi; in
 lib.mkIf cfg.enable {
   home.packages = with pkgs; [
     unzip

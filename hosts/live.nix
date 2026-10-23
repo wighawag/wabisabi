@@ -2,11 +2,11 @@
   config,
   lib,
   pkgs,
-  wasisabiModules,
+  wabisabiModules,
   ...
 }:
 
-# THE LIVE SESSION on the offline medium: the wasisabi desktop, logged in
+# THE LIVE SESSION on the offline medium: the wabisabi desktop, logged in
 # automatically as the installer's `nixos` user (no password, passwordless
 # sudo, both from NixOS's installation-device profile), so the machine can be
 # tried before anything touches its disk. Imported by hosts/iso.nix when
@@ -30,7 +30,7 @@ let
   # A PLAIN GLOB, NOT `compgen -G`: scripts run under nixpkgs' non-interactive
   # bash, which is built without programmable completion, so `compgen` does
   # not exist there, and the test failed silently on a machine with a GPU.
-  liveSession = pkgs.writeShellScript "wasisabi-live-session" ''
+  liveSession = pkgs.writeShellScript "wabisabi-live-session" ''
     hasRenderNode() {
       local n
       for n in /dev/dri/renderD*; do
@@ -49,10 +49,10 @@ let
     clear
     cat <<'MSG'
 
-      wasisabi live: this machine has no usable GPU (no /dev/dri/renderD*),
+      wabisabi live: this machine has no usable GPU (no /dev/dri/renderD*),
       and the desktop needs one, so it was not started.
 
-      You can still install:   sudo wasisabi-install
+      You can still install:   sudo wabisabi-install
       Wifi:                    sudo nmtui
 
     MSG
@@ -62,7 +62,7 @@ let
   # THE KEYBOARD, CHOSEN IN THE LIVE SESSION. The medium cannot know the
   # keyboard in front of it (a keyboard does not report its layout), so it
   # boots on US and asks, once, in the welcome terminal: Enter keeps US, a few
-  # letters find another. Also on PATH as `wasisabi-keyboard`, and in the
+  # letters find another. Also on PATH as `wabisabi-keyboard`, and in the
   # launcher, for changing it again.
   #
   # IT GOES THROUGH systemd-localed, the one place niri reads the layout from
@@ -76,7 +76,7 @@ let
   # Picking from a list rather than typing a layout code, because the person
   # choosing is by definition typing on the wrong layout.
   keyboard = pkgs.writeShellApplication {
-    name = "wasisabi-keyboard";
+    name = "wabisabi-keyboard";
     runtimeInputs = [
       pkgs.gum
       pkgs.gawk
@@ -135,7 +135,7 @@ let
       options=$(field Options)
       if sudo localectl set-x11-keymap --no-convert "$new_layout" "" "$new_variant" "$options"; then
         echo "  Keyboard is now $(describe "$new_layout")''${new_variant:+ ($new_variant)}."
-        echo "  To change it again: wasisabi-keyboard"
+        echo "  To change it again: wabisabi-keyboard"
       else
         echo "  Could not switch the keyboard to $new_layout." >&2
         exit 1
@@ -145,7 +145,7 @@ let
 
   # Opened once when the live desktop starts: what this is, and the one
   # command that installs it.
-  welcome = pkgs.writeShellScript "wasisabi-live-welcome" ''
+  welcome = pkgs.writeShellScript "wabisabi-live-welcome" ''
     # The keyboard first: everything after it is typed.
     ${lib.getExe keyboard} || true
     clear
@@ -153,7 +153,7 @@ let
     # Lines kept short: this opens in a tiled, half-width terminal.
     cat <<'MSG'
 
-      Welcome to the wasisabi live session.
+      Welcome to the wabisabi live session.
 
       It runs from the USB stick and from RAM.
       Nothing is written to this computer's
@@ -173,9 +173,9 @@ let
                            all goes through Tor
                            (needs a network)
 
-      To install:  sudo wasisabi-install
+      To install:  sudo wabisabi-install
       Wifi:        sudo nmtui
-      Keyboard:    wasisabi-keyboard
+      Keyboard:    wabisabi-keyboard
 
     MSG
     exec ${lib.getExe pkgs.bashInteractive} -l
@@ -190,12 +190,12 @@ let
     else
       lib.getExe pkgs.foot;
 
-  tuigreet = "${lib.getExe pkgs.tuigreet} --time --greeting 'wasisabi live: user nixos, no password.  Install: sudo wasisabi-install' --cmd ${liveSession}";
+  tuigreet = "${lib.getExe pkgs.tuigreet} --time --greeting 'wabisabi live: user nixos, no password.  Install: sudo wabisabi-install' --cmd ${liveSession}";
 in
 {
-  networking.hostName = "wasisabi-live";
+  networking.hostName = "wabisabi-live";
 
-  wasisabi = {
+  wabisabi = {
     enable = true;
     user = "nixos";
     # The text greeter, whatever the default: it is the one that still works
@@ -210,10 +210,10 @@ in
   # What the agent should know on top of the machine guide (modules/agents/
   # AGENTS.md): that this is the live medium, and that sudo here depends on
   # where the agent runs (see allowPrivilegeEscalation below).
-  wasisabi.agents.extraGuide = ''
+  wabisabi.agents.extraGuide = ''
     ## This is the live session
 
-    This computer is running wasisabi from a USB stick, from memory, as the user `nixos`. Nothing is written to its disks and nothing done here survives a reboot, so there is no `~/nixos` configuration to change: a fix that should last belongs in the installed system. To install: `sudo wasisabi-install`, in a terminal. To change the keyboard layout: `wasisabi-keyboard`, in a terminal.
+    This computer is running wabisabi from a USB stick, from memory, as the user `nixos`. Nothing is written to its disks and nothing done here survives a reboot, so there is no `~/nixos` configuration to change: a fix that should last belongs in the installed system. To install: `sudo wabisabi-install`, in a terminal. To change the keyboard layout: `wabisabi-keyboard`, in a terminal.
 
     Here `sudo` needs no password in a terminal, and is refused in the web UI. Still ask before using it.
   '';
@@ -255,31 +255,31 @@ in
   services.gnome.gnome-keyring.enable = false;
 
   home-manager.users.nixos = {
-    imports = [ wasisabiModules.home ];
-    wasisabi.enable = true;
+    imports = [ wabisabiModules.home ];
+    wabisabi.enable = true;
 
-    xdg.desktopEntries.wasisabi-keyboard = {
+    xdg.desktopEntries.wabisabi-keyboard = {
       name = "Keyboard layout";
       comment = "Change the keyboard layout of this live session";
       # Held open a moment after, so the result can be read before the
       # terminal closes.
-      exec = "${terminalFor config.home-manager.users.nixos.wasisabi.terminal} -e ${pkgs.writeShellScript "wasisabi-keyboard-window" "${lib.getExe keyboard}; sleep 3"}";
+      exec = "${terminalFor config.home-manager.users.nixos.wabisabi.terminal} -e ${pkgs.writeShellScript "wabisabi-keyboard-window" "${lib.getExe keyboard}; sleep 3"}";
       icon = "input-keyboard";
       terminal = false;
       categories = [ "Settings" ];
       settings.Keywords = "keyboard;layout;keymap;azerty;qwertz;";
     };
 
-    systemd.user.services.wasisabi-live-welcome = {
+    systemd.user.services.wabisabi-live-welcome = {
       Unit = {
-        Description = "wasisabi live welcome";
+        Description = "wabisabi live welcome";
         After = [ "graphical-session.target" ];
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
         # After Noctalia's own first-login intro, not on top of it: one thing
         # at a time (the assistant's welcome notification waits the same way).
-        ExecStart = "${lib.getExe config.home-manager.users.nixos.wasisabi.afterNoctaliaIntro} ${terminalFor config.home-manager.users.nixos.wasisabi.terminal} -e ${welcome}";
+        ExecStart = "${lib.getExe config.home-manager.users.nixos.wabisabi.afterNoctaliaIntro} ${terminalFor config.home-manager.users.nixos.wabisabi.terminal} -e ${welcome}";
         Restart = "no";
       };
       Install.WantedBy = [ "graphical-session.target" ];
@@ -292,7 +292,7 @@ in
   isoImage.configurationName = "live desktop";
   specialisation.installer.configuration = {
     isoImage.configurationName = lib.mkForce "text installer only";
-    wasisabi.enable = lib.mkForce false;
+    wabisabi.enable = lib.mkForce false;
     services.greetd.enable = lib.mkForce false;
     home-manager.users = lib.mkForce { };
   };

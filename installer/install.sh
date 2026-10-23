@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
-# wasisabi-install: ask, partition, install, get out of the way.
+# wabisabi-install: ask, partition, install, get out of the way.
 #
 # The questions come from installer/questions.json, which is generated from
 # the option declarations in modules/options.nix and home/options.nix, so this
-# script knows nothing about what wasisabi's options ARE. It renders whatever
+# script knows nothing about what wabisabi's options ARE. It renders whatever
 # it is handed. Adding an option to the API adds a question here with no edit
 # to this file.
 #
 # Everything it writes to the target goes through installer/emit.sh, which
 # fills in template/ -- the same template `nix flake new` scaffolds by hand.
 #
-#   wasisabi-install                          interactive
-#   wasisabi-install --answers answers.json   unattended, same questions
-#   wasisabi-install --out-only DIR           just write the flake, touch no disk
+#   wabisabi-install                          interactive
+#   wabisabi-install --answers answers.json   unattended, same questions
+#   wabisabi-install --out-only DIR           just write the flake, touch no disk
 #
 set -euo pipefail
 
-: "${WASISABI_QUESTIONS:?internal: questions.json path not baked in}"
-: "${WASISABI_TEMPLATE:?internal: template path not baked in}"
-: "${WASISABI_EMIT:?internal: emit.sh path not baked in}"
-: "${WASISABI_LOCK:?internal: flake.lock path not baked in}"
-: "${WASISABI_URL:?internal: wasisabi input url not baked in}"
-: "${WASISABI_DISKO:?internal: disko layout dir not baked in}"
-: "${WASISABI_NIXPKGS:?internal: nixpkgs source path not baked in}"
+: "${WABISABI_QUESTIONS:?internal: questions.json path not baked in}"
+: "${WABISABI_TEMPLATE:?internal: template path not baked in}"
+: "${WABISABI_EMIT:?internal: emit.sh path not baked in}"
+: "${WABISABI_LOCK:?internal: flake.lock path not baked in}"
+: "${WABISABI_URL:?internal: wabisabi input url not baked in}"
+: "${WABISABI_DISKO:?internal: disko layout dir not baked in}"
+: "${WABISABI_NIXPKGS:?internal: nixpkgs source path not baked in}"
 
 # disko resolves `<nixpkgs>` when it evaluates a layout. Point it at the
 # sources on this medium rather than at whatever the environment happens to
 # say, which in a systemd unit is nothing at all.
-export NIX_PATH="nixpkgs=$WASISABI_NIXPKGS${NIX_PATH:+:$NIX_PATH}"
-: "${WASISABI_STATE_VERSION:?internal: state version not baked in}"
-WASISABI_OFFLINE="${WASISABI_OFFLINE:-0}"
+export NIX_PATH="nixpkgs=$WABISABI_NIXPKGS${NIX_PATH:+:$NIX_PATH}"
+: "${WABISABI_STATE_VERSION:?internal: state version not baked in}"
+WABISABI_OFFLINE="${WABISABI_OFFLINE:-0}"
 
 ANSWERS_IN="" OUT_ONLY="" ASSUME_YES=0 TARGET=/mnt NO_REBOOT=0
 
@@ -40,13 +40,13 @@ while [ $# -gt 0 ]; do
     --target) TARGET="$2"; shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     --no-reboot) NO_REBOOT=1; shift ;;
-    --offline) WASISABI_OFFLINE=1; shift ;;
+    --offline) WABISABI_OFFLINE=1; shift ;;
     --debug) set -x; shift ;;
     -h|--help)
       sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
-    *) echo "wasisabi-install: unknown argument '$1'" >&2; exit 2 ;;
+    *) echo "wabisabi-install: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
 
@@ -78,7 +78,7 @@ on_exit() {
   rm -rf "$WORK"
   if [ "$code" -ne 0 ]; then
     echo
-    warn "wasisabi-install stopped (exit $code)."
+    warn "wabisabi-install stopped (exit $code)."
     if [ "$DISK_TOUCHED" = 1 ]; then
       # Every other abort path says "no disk was touched", which teaches the
       # reader that silence means safety. Past this point it does not.
@@ -95,7 +95,7 @@ trap on_exit EXIT INT TERM HUP
 declare -A ANSWER=()
 ANSWER_ORDER=()
 
-# Whether the user walked through wasisabi's own options. Declared here
+# Whether the user walked through wabisabi's own options. Declared here
 # because the --answers path never enters the interactive loop, and `set -u`
 # turns an unset variable into a crash rather than an empty string.
 reviewed=0
@@ -109,12 +109,12 @@ set_answer() {
 get_answer() { echo "${ANSWER[$1]:-}"; }
 
 # THE INSTALLER'S OWN QUESTIONS NEED THEIR DEFAULTS WRITTEN DOWN, and this is
-# the one place where "unanswered means it follows wasisabi" is NOT true.
+# the one place where "unanswered means it follows wabisabi" is NOT true.
 #
-# A wasisabi option left unanswered is simply absent from the generated
+# A wabisabi option left unanswered is simply absent from the generated
 # config, so the machine keeps tracking the project's default -- which is the
 # behaviour the summary promises. But `extra:` items are the installer's own
-# (firmware, early-KMS modules): wasisabi has no opinion to fall back to, so
+# (firmware, early-KMS modules): wabisabi has no opinion to fall back to, so
 # silence there means the bare NixOS default. Skipping the option review used
 # to leave `hardware.enableRedistributableFirmware` unset, which is `false`,
 # which is a laptop that installed over wifi and then has no wifi.
@@ -131,7 +131,7 @@ apply_installer_defaults() {
     fi
     [ -n "$default" ] || continue
     set_answer "$key" "$default"
-  done < <(jq -r '.groups[].items[] | select(.emit != null or .key == "secrets:mode" or .key == "install:mode") | "\(.key)\t\(.kind)\t\(.default // "")"' "$WASISABI_QUESTIONS")
+  done < <(jq -r '.groups[].items[] | select(.emit != null or .key == "secrets:mode" or .key == "install:mode") | "\(.key)\t\(.kind)\t\(.default // "")"' "$WABISABI_QUESTIONS")
 }
 
 # Which answers are secrets is read from the QUESTION DEFINITIONS, not from a
@@ -139,7 +139,7 @@ apply_installer_defaults() {
 # questions appear here without editing this script, so a new password-kind
 # question must not need someone to remember to add it to a `case` before it
 # stops being written to a world-readable file on the installed machine.
-mapfile -t SECRET_KEYS < <(jq -r '.groups[].items[] | select(.kind == "password" or .kind == "agekey") | .key' "$WASISABI_QUESTIONS")
+mapfile -t SECRET_KEYS < <(jq -r '.groups[].items[] | select(.kind == "password" or .kind == "agekey") | .key' "$WABISABI_QUESTIONS")
 
 is_secret() {
   local key="$1" secret
@@ -161,7 +161,7 @@ answers_json() {
   } | jq -s 'add'
 }
 
-q() { jq -r "$@" "$WASISABI_QUESTIONS"; }
+q() { jq -r "$@" "$WABISABI_QUESTIONS"; }
 
 # ── the question loop ─────────────────────────────────────────────────────
 
@@ -376,7 +376,7 @@ live_x11() {
 
 detect_drm_modules() {
   # Early KMS for the Plymouth splash. This is hardware knowledge, so it
-  # belongs to the machine's own config rather than to wasisabi's modules;
+  # belongs to the machine's own config rather than to wabisabi's modules;
   # the installer is the one place that can see the actual hardware.
   local d driver out=()
   for d in /sys/class/drm/card*/device/driver; do
@@ -413,7 +413,7 @@ RESTORE_DISKS=()
 restore_eval_in() {
   local src="$1" attr="$2" fn="$3"
   local -a flags=(--extra-experimental-features "nix-command flakes" --json --no-write-lock-file)
-  [ "$WASISABI_OFFLINE" = 1 ] && flags+=(--offline)
+  [ "$WABISABI_OFFLINE" = 1 ] && flags+=(--offline)
   nix eval "${flags[@]}" "path:$src#$attr" --apply "$fn"
 }
 restore_eval() { restore_eval_in "$RESTORE_CLONE" "$@"; }
@@ -486,7 +486,7 @@ restore_prepare() {
   # Single-quoted on purpose: ${user} and friends are NIX interpolation.
   # shellcheck disable=SC2016
   facts=$(restore_eval "nixosConfigurations.$host.config" 'c: let
-    user = c.wasisabi.user or "";
+    user = c.wabisabi.user or "";
     u = c.users.users.${user} or { };
     secrets = builtins.attrValues (c.sops.secrets or { });
     # tryEval, not `or`: sops.defaultSopsFile has NO default, so a config that
@@ -503,15 +503,15 @@ restore_prepare() {
     layout = c.services.xserver.xkb.layout;
     variant = c.services.xserver.xkb.variant;
     keyFile = c.sops.age.keyFile or null;
-    templateSecrets = (c.wasisabi.secrets.sopsFile or null) != null;
+    templateSecrets = (c.wabisabi.secrets.sopsFile or null) != null;
     # One file the given key must open: the default secrets file, else the
     # first declared secret. Proves the key before the disk is touched.
     probeFile = if defaultFile != null && defaultFile != "" then defaultFile
       else if firstFile != null then firstFile else "";
     probeFormat = if defaultFile != null && defaultFile != "" then (c.sops.defaultSopsFormat or "yaml")
       else if first != null then first.format else "yaml";
-    passwordFromSecrets = (c.wasisabi.secrets.sopsFile or null) != null
-      && (c.wasisabi.secrets.ownerPassword or false) && user != "";
+    passwordFromSecrets = (c.wabisabi.secrets.sopsFile or null) != null
+      && (c.wabisabi.secrets.ownerPassword or false) && user != "";
     passwordDeclared = builtins.any (a: (u.${a} or null) != null)
       [ "hashedPasswordFile" "hashedPassword" "password" "initialHashedPassword" "initialPassword" ];
     disks = map (d: d.device) (builtins.attrValues (c.disko.devices.disk or { }));
@@ -519,7 +519,7 @@ restore_prepare() {
       sopsFile = toString f.sopsFile;
       inherit (f) format mode;
       extract = if f.extract == null then "" else f.extract;
-    }) (c.wasisabi.restore.files or { });
+    }) (c.wabisabi.restore.files or { });
   }') || die "could not evaluate nixosConfigurations.$host. Nothing was touched."
 
   # The whole system, evaluated, so its assertions run NOW. A config that
@@ -532,14 +532,14 @@ restore_prepare() {
 
   local user
   user=$(jq -r .user <<<"$facts")
-  [ -n "$user" ] || die "'$host' does not name its owner (wasisabi.user), so there is no account to restore the repo into."
+  [ -n "$user" ] || die "'$host' does not name its owner (wabisabi.user), so there is no account to restore the repo into."
   set_answer "identity:hostname" "$(jq -r .hostName <<<"$facts")"
   set_answer "identity:username" "$user"
   set_answer "system:keyboard.layout" "$(jq -r .layout <<<"$facts")"
   set_answer "system:keyboard.variant" "$(jq -r .variant <<<"$facts")"
 
   # WHERE THE REPO GOES: as asked, else where the config says it lives (the
-  # /etc/nixos link a wasisabi config declares), else the owner's ~/nixos. A
+  # /etc/nixos link a wabisabi config declares), else the owner's ~/nixos. A
   # fleet repo usually declares no link, and belongs wherever its owner keeps
   # checkouts, which only they know.
   RESTORE_REPO_PATH=$(get_answer "restore:repoPath")
@@ -581,7 +581,7 @@ restore_prepare() {
   else
     # Probe: swap in a hardware file naming a disk that cannot exist, and see
     # whether the evaluated root filesystem is that disk.
-    local probe="$WORK/probe" probe_dev="/dev/disk/by-uuid/wasisabi-restore-probe"
+    local probe="$WORK/probe" probe_dev="/dev/disk/by-uuid/wabisabi-restore-probe"
     cp -a "$RESTORE_CLONE" "$probe"
     cat > "$probe/hardware-configuration.nix" <<EOF
 { lib, ... }: {
@@ -617,7 +617,7 @@ EOF
     note "Your key opens the repo's secrets."
   fi
 
-  # FILES TO PLACE BEFORE THE FIRST BOOT (wasisabi.restore.files), each
+  # FILES TO PLACE BEFORE THE FIRST BOOT (wabisabi.restore.files), each
   # decrypted now, which both proves the key opens it and means nothing can
   # fail between partitioning and placing them. Kept on tmpfs until then.
   : > "$WORK/files.tsv"
@@ -629,9 +629,9 @@ EOF
     while IFS=$'\x1f' read -r path file format extract mode; do
       case "$path" in
         /*) ;;
-        *) die "wasisabi.restore.files: '$path' is not an absolute path." ;;
+        *) die "wabisabi.restore.files: '$path' is not an absolute path." ;;
       esac
-      case "/$path/" in */../*) die "wasisabi.restore.files: '$path' contains '..'." ;; esac
+      case "/$path/" in */../*) die "wabisabi.restore.files: '$path' contains '..'." ;; esac
       (umask 077; restore_decrypt "$file" "$format" "$extract" > "$WORK/files/$i") \
         || die "the key does not open $file, which the config wants placed at $path. Nothing was touched."
       printf '%s\t%s\t%s\n' "$i" "$path" "$mode" >> "$WORK/files.tsv"
@@ -673,10 +673,10 @@ if [ -n "$ANSWERS_IN" ]; then
 else
   clear
   gum style --border rounded --padding "1 3" --border-foreground 141 \
-    "$(gum style --bold 'wasisabi')" \
+    "$(gum style --bold 'wabisabi')" \
     "an opinionated, libre-only Wayland desktop" \
     "" \
-    "This asks for your machine's identity, then for wasisabi's own" \
+    "This asks for your machine's identity, then for wabisabi's own" \
     "options, and writes an ordinary NixOS flake to ~/nixos: a git" \
     "repo you own, that can rebuild this machine, and that you can" \
     "edit, push, or abandon afterwards."
@@ -697,20 +697,20 @@ else
       fi
     fi
 
-    # Identity and disks are not optional. wasisabi's own options are, and
+    # Identity and disks are not optional. wabisabi's own options are, and
     # being asked twenty questions you have no opinion about is a bad first
     # impression -- so offer the defaults once, in one go, and let anyone who
     # does care say so. Options left at their default are NOT written into the
-    # generated config, so the machine keeps tracking wasisabi's defaults
+    # generated config, so the machine keeps tracking wabisabi's defaults
     # rather than freezing today's values into a file.
     if [ "$essential" != "true" ] && [ "$reviewed" = 0 ]; then
-      heading "wasisabi's own options"
+      heading "wabisabi's own options"
       note "$(q '[.groups[] | select(.essential != true) | .items[] | select(.emit != null)] | length') options control the desktop itself: greeter, shell, terminal, browser, apps, services."
       note "The defaults are the project's opinion and are all documented in modules/options.nix."
       if gum confirm --default=false "Review them one by one?"; then
         reviewed=1
       else
-        note "Keeping the defaults. Nothing is written for them, so they follow wasisabi as it changes."
+        note "Keeping the defaults. Nothing is written for them, so they follow wabisabi as it changes."
         break
       fi
     fi
@@ -726,7 +726,7 @@ else
       fi
 
       # Offer the layout the live session is using: someone who picked one
-      # there (wasisabi-keyboard) has already said what this keyboard is.
+      # there (wabisabi-keyboard) has already said what this keyboard is.
       # The variant only goes with the layout it belongs to.
       case "$(jq -r '.key' <<<"$item")" in
         system:keyboard.layout)
@@ -801,8 +801,8 @@ if [ -z "$OUT_ONLY" ] && { [ "$layout" = "luks" ] || [ "$layout" = "disko" ]; } 
 fi
 
 if [ -z "$OUT_ONLY" ]; then
-  [ "$(id -u)" = 0 ] || die "installing needs root. Try: sudo wasisabi-install"
-  [ -d /sys/firmware/efi ] || die "this machine did not boot in UEFI mode. wasisabi's shipped layouts are UEFI-only; use the manual layout for BIOS."
+  [ "$(id -u)" = 0 ] || die "installing needs root. Try: sudo wabisabi-install"
+  [ -d /sys/firmware/efi ] || die "this machine did not boot in UEFI mode. wabisabi's shipped layouts are UEFI-only; use the manual layout for BIOS."
 fi
 
 # ── secrets: settled before any disk is touched ──────────────────────────
@@ -820,7 +820,7 @@ else
 fi
 if [ -n "$OUT_ONLY" ]; then
   # --out-only writes the flake as the template renders it; secrets are a
-  # step on the machine, run with `wasisabi-secrets init` in the result.
+  # step on the machine, run with `wabisabi-secrets init` in the result.
   secrets_mode=skip
 fi
 
@@ -831,7 +831,7 @@ elif [ "$secrets_mode" = generate ]; then
   keygen_args=(keygen --out "$WORK/age.key")
   if [ -n "$ANSWERS_IN" ] || [ "$ASSUME_YES" = 1 ]; then keygen_args+=(--yes); fi
   heading "Your age key"
-  wasisabi-secrets "${keygen_args[@]}"
+  wabisabi-secrets "${keygen_args[@]}"
 fi
 
 if [ "$secrets_mode" = generate ] || [ "$secrets_mode" = import ]; then
@@ -849,14 +849,14 @@ fi
 answers_json > "$WORK/answers.json"
 
 if [ -n "$OUT_ONLY" ]; then
-  bash "$WASISABI_EMIT" \
-    --questions "$WASISABI_QUESTIONS" --answers "$WORK/answers.json" \
-    --template "$WASISABI_TEMPLATE" --out "$OUT_ONLY" \
-    --state-version "$WASISABI_STATE_VERSION" --wasisabi-url "$WASISABI_URL"
+  bash "$WABISABI_EMIT" \
+    --questions "$WABISABI_QUESTIONS" --answers "$WORK/answers.json" \
+    --template "$WABISABI_TEMPLATE" --out "$OUT_ONLY" \
+    --state-version "$WABISABI_STATE_VERSION" --wabisabi-url "$WABISABI_URL"
   # install, not cp: the lock comes from the store at mode 0444, and a plain
   # copy leaves a read-only file that a second run cannot overwrite and that
   # `nix flake update` in the resulting tree cannot rewrite.
-  install -m 0644 "$WASISABI_LOCK" "$OUT_ONLY/flake.lock"
+  install -m 0644 "$WABISABI_LOCK" "$OUT_ONLY/flake.lock"
   bold "Wrote the flake to $OUT_ONLY. No disk was touched."
   exit 0
 fi
@@ -880,14 +880,14 @@ printf '  %-16s %s\n' \
   "layout" "$layout" \
   "installing" "$([ "$install_mode" = restore ] && echo "'$RESTORE_HOST' from $(get_answer "restore:source")" || echo "a new machine")" \
   "config repo" "$REPO_PATH (linked from /etc/nixos)" \
-  "secrets" "$(case "$secrets_mode" in generate) echo "sops, with the new key" ;; import) echo "sops, with your key" ;; restore) [ -s "$WORK/age.key" ] && echo "the repo's, with your key" || echo "none in the repo" ;; *) echo "not set up (wasisabi-secrets init, later)" ;; esac)" \
-  "packages from" "$([ "$WASISABI_OFFLINE" = 1 ] && echo "this medium, offline" || echo "cache.nixos.org, over the network")"
+  "secrets" "$(case "$secrets_mode" in generate) echo "sops, with the new key" ;; import) echo "sops, with your key" ;; restore) [ -s "$WORK/age.key" ] && echo "the repo's, with your key" || echo "none in the repo" ;; *) echo "not set up (wabisabi-secrets init, later)" ;; esac)" \
+  "packages from" "$([ "$WABISABI_OFFLINE" = 1 ] && echo "this medium, offline" || echo "cache.nixos.org, over the network")"
 echo
 # Only true when the options were NOT reviewed. Walking through them records
 # what you chose, including choices that match today's default, and recorded
 # values are exactly the ones that stop tracking the project.
 if [ "$reviewed" = 0 ] && [ -z "$ANSWERS_IN" ]; then
-  note "Options you did not set are left out of the config, so they keep following wasisabi."
+  note "Options you did not set are left out of the config, so they keep following wabisabi."
 fi
 jq -r 'to_entries[] | select(.key | startswith("identity:") or startswith("disk:") | not) | "  \(.key | sub("^[a-z]+:"; "")) = \(.value)"' "$WORK/answers.json" 2>/dev/null || true
 
@@ -940,7 +940,7 @@ else
 
   heading "Partitioning $device"
   DISK_TOUCHED=1
-  disko "${disko_args[@]}" "$WASISABI_DISKO/$layout.nix"
+  disko "${disko_args[@]}" "$WABISABI_DISKO/$layout.nix"
 fi
 
 mountpoint -q "$TARGET" || die "nothing is mounted at $TARGET after partitioning."
@@ -974,14 +974,14 @@ if [ "$install_mode" = restore ]; then
   fi
   if ! git -C "$REPO" diff --cached --quiet; then
     git -C "$REPO" \
-      -c user.name=wasisabi-install -c user.email=installer@localhost \
+      -c user.name=wabisabi-install -c user.email=installer@localhost \
       commit -q -m "Reinstall $RESTORE_HOST on new disks
 
-hardware-configuration.nix regenerated by wasisabi-install for the disks this
+hardware-configuration.nix regenerated by wabisabi-install for the disks this
 reinstall partitioned (new UUIDs). Nothing else in the repo was changed."
   fi
   # THE KEY GOES ONLY WHERE THE CONFIG READS IT. A config set up by
-  # wasisabi-secrets uses one key for owner and machine, so it gets both
+  # wabisabi-secrets uses one key for owner and machine, so it gets both
   # copies. Anything else gets the machine's copy only if the config names a
   # key file (sops.age.keyFile), and never the owner's: for a fleet repo the
   # key that opens everything is the ADMIN key, and leaving it on one laptop
@@ -991,16 +991,16 @@ reinstall partitioned (new UUIDs). Nothing else in the repo was changed."
     [ -z "$RESTORE_KEYFILE_PATH" ] || key_args+=(--machine-key "$RESTORE_KEYFILE_PATH")
     if [ "$RESTORE_TEMPLATE_SECRETS" = 1 ]; then
       heading "Putting your age key in place"
-      wasisabi-secrets "${key_args[@]}"
+      wabisabi-secrets "${key_args[@]}"
     elif [ -n "$RESTORE_KEYFILE_PATH" ]; then
       heading "Putting the machine's age key in place"
-      wasisabi-secrets "${key_args[@]}" --no-user-copy
+      wabisabi-secrets "${key_args[@]}" --no-user-copy
     else
       note "Your age key was used for this restore only; the config does not read one from disk, so it was not copied there."
     fi
   fi
 
-  # The files the config asked for (wasisabi.restore.files), decrypted
+  # The files the config asked for (wabisabi.restore.files), decrypted
   # before partitioning, placed now, before activation first needs them.
   while IFS=$'\t' read -r idx path mode; do
     install -D -m "$mode" -o root -g root "$WORK/files/$idx" "$TARGET$path"
@@ -1008,12 +1008,12 @@ reinstall partitioned (new UUIDs). Nothing else in the repo was changed."
   done < "$WORK/files.tsv"
 else
   heading "Writing ~/nixos"
-  bash "$WASISABI_EMIT" \
-    --questions "$WASISABI_QUESTIONS" --answers "$WORK/answers.json" \
-    --template "$WASISABI_TEMPLATE" --out "$WORK/flake" \
-    --state-version "$WASISABI_STATE_VERSION" --wasisabi-url "$WASISABI_URL"
+  bash "$WABISABI_EMIT" \
+    --questions "$WABISABI_QUESTIONS" --answers "$WORK/answers.json" \
+    --template "$WABISABI_TEMPLATE" --out "$WORK/flake" \
+    --state-version "$WABISABI_STATE_VERSION" --wabisabi-url "$WABISABI_URL"
 
-  install -m 0644 "$WASISABI_LOCK" "$WORK/flake/flake.lock"
+  install -m 0644 "$WABISABI_LOCK" "$WORK/flake/flake.lock"
   install -m 0644 \
     "$WORK/flake/flake.nix" \
     "$WORK/flake/configuration.nix" \
@@ -1040,14 +1040,14 @@ else
     git -C "$REPO" init -q -b main
     git -C "$REPO" add -A
     git -C "$REPO" \
-      -c user.name=wasisabi-install -c user.email=installer@localhost \
-      commit -q -m "Install $hostname with wasisabi
+      -c user.name=wabisabi-install -c user.email=installer@localhost \
+      commit -q -m "Install $hostname with wabisabi
 
-  Generated by wasisabi-install from template/ plus the answers in
+  Generated by wabisabi-install from template/ plus the answers in
   installer-answers.json. This is an ordinary NixOS flake that rebuilds this
   machine: edit it, then
     sudo nixos-rebuild switch
-  (/etc/nixos links here), or walk away from wasisabi entirely by removing the
+  (/etc/nixos links here), or walk away from wabisabi entirely by removing the
   module imports."
   fi
 
@@ -1055,7 +1055,7 @@ else
   # Same tool, same code the owner runs later by hand if they skipped this.
   if [ "$secrets_mode" = generate ] || [ "$secrets_mode" = import ]; then
     heading "Setting up secrets"
-    wasisabi-secrets init --repo "$REPO" --root "$TARGET" --user "$username" \
+    wabisabi-secrets init --repo "$REPO" --root "$TARGET" --user "$username" \
       --key-file "$WORK/age.key" --password-hash-file "$WORK/password.hash" --yes
   fi
 fi
@@ -1080,7 +1080,7 @@ note "This is the long part. It is building your actual configuration, not unpac
 # handed over as a prebuilt system. Everything it needs is already on the
 # medium, so this builds only the handful of tiny derivations that depend on
 # the answers, and RAM is not at risk.
-if [ "$WASISABI_OFFLINE" = 1 ]; then
+if [ "$WABISABI_OFFLINE" = 1 ]; then
   note "Building from this medium, with the network explicitly disabled."
   if ! toplevel=$(nix build --offline --no-link --print-out-paths --no-update-lock-file \
       "path:$REPO#nixosConfigurations.$FLAKE_ATTR.config.system.build.toplevel"); then
@@ -1094,7 +1094,7 @@ else
 fi
 
 # RETRY THE NETWORKED BUILD, because what fails it most is the network. A
-# wasisabi system builds packages that no public binary cache carries (the
+# wabisabi system builds packages that no public binary cache carries (the
 # agent layer's pi, wherever, webveil, memonaut, anonctl), and those builds
 # fetch hundreds of npm tarballs; one dropped HTTP/2 stream fails the whole
 # install AFTER the disk has been wiped. Measured in the VM install test
@@ -1105,7 +1105,7 @@ fi
 install_ok=0
 if [ "${#install_args[@]}" -gt 0 ]; then
   attempts=1
-  [ "$WASISABI_OFFLINE" = 1 ] || attempts=3
+  [ "$WABISABI_OFFLINE" = 1 ] || attempts=3
   for attempt in $(seq 1 "$attempts"); do
     if nixos-install "${install_args[@]}"; then
       install_ok=1
@@ -1191,7 +1191,7 @@ elif [ -s "$WORK/password.hash" ] && [ "$install_mode" = restore ]; then
   warn "  nixos-enter --root $TARGET -c 'passwd $username'"
 elif [ -s "$WORK/password.hash" ]; then
   warn "The password did not come through from the encrypted config; setting it directly."
-  warn "The machine will still boot; check 'wasisabi-secrets' after logging in."
+  warn "The machine will still boot; check 'wabisabi-secrets' after logging in."
   set_target_password "$username" "$(get_answer "identity:password")" \
     || die "could not set the password for $username by either route. From this medium: nixos-enter --root $TARGET -c 'passwd $username'"
 elif set_target_password "$username" "$(get_answer "identity:password")"; then
@@ -1254,12 +1254,12 @@ gum style --border rounded --padding "1 3" --border-foreground 141 \
       echo "rebuild this machine after a wipe$([ "$secrets_mode" != skip ] && echo ", with your age key")."
     fi)" \
   "" \
-  "Secrets: wasisabi-secrets --help" \
-  "Options: nixos-option wasisabi, or modules/options.nix upstream."
+  "Secrets: wabisabi-secrets --help" \
+  "Options: nixos-option wabisabi, or modules/options.nix upstream."
 
 # A machine-readable line, so an automated install can be checked for success
 # rather than for the absence of an error message.
-echo "WASISABI_INSTALL_OK host=$hostname user=$username layout=$layout secrets=$secrets_mode mode=$install_mode"
+echo "WABISABI_INSTALL_OK host=$hostname user=$username layout=$layout secrets=$secrets_mode mode=$install_mode"
 
 if [ "$NO_REBOOT" = 1 ]; then
   note "Leaving the machine running (--no-reboot)."

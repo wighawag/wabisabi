@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# wasisabi-secrets: the owner's side of sops in their machine's flake.
+# wabisabi-secrets: the owner's side of sops in their machine's flake.
 #
 # One age key per config repo, used both by the owner (to edit secrets with
 # sops) and by the machine (to decrypt them at activation). The repo holds
@@ -7,12 +7,12 @@
 # private key lives outside it, in two places, plus a backup the owner keeps.
 # With the repo and the key, a wiped machine is reinstalled as it was.
 #
-#   wasisabi-secrets init       set up sops in the config repo and commit it
-#   wasisabi-secrets password   change the login password, in the repo AND now
-#   wasisabi-secrets edit       open the secrets file decrypted, in $EDITOR
-#   wasisabi-secrets backup     show the key again, to save another copy
-#   wasisabi-secrets keygen     make a new key (used by the installer)
-#   wasisabi-secrets install-key put a key you have where the machine and you need it
+#   wabisabi-secrets init       set up sops in the config repo and commit it
+#   wabisabi-secrets password   change the login password, in the repo AND now
+#   wabisabi-secrets edit       open the secrets file decrypted, in $EDITOR
+#   wabisabi-secrets backup     show the key again, to save another copy
+#   wabisabi-secrets keygen     make a new key (used by the installer)
+#   wabisabi-secrets install-key put a key you have where the machine and you need it
 #
 # Options:
 #   --repo DIR                config repo (default: where /etc/nixos points, else ~/nixos)
@@ -30,7 +30,7 @@
 set -euo pipefail
 
 SECRETS_REL="secrets/secrets.yaml"
-ENABLE_LINE="wasisabi.secrets.sopsFile = ./$SECRETS_REL;"
+ENABLE_LINE="wabisabi.secrets.sopsFile = ./$SECRETS_REL;"
 
 cmd="${1:-}"
 [ $# -gt 0 ] && shift
@@ -51,7 +51,7 @@ while [ $# -gt 0 ]; do
     --no-user-copy) USER_COPY=0; shift ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     --no-commit) COMMIT=0; shift ;;
-    *) echo "wasisabi-secrets: unknown argument '$1'" >&2; exit 2 ;;
+    *) echo "wabisabi-secrets: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
 
@@ -63,7 +63,7 @@ interactive() { [ "$ASSUME_YES" = 0 ] && [ -t 0 ] && [ -t 1 ]; }
 bold() { gum style --bold -- "$*"; }
 note() { gum style --foreground 244 -- "$*"; }
 warn() { gum style --foreground 214 -- "$*"; }
-die() { gum style --foreground 196 --bold -- "wasisabi-secrets: $*" >&2; exit 1; }
+die() { gum style --foreground 196 --bold -- "wabisabi-secrets: $*" >&2; exit 1; }
 
 # Key material only ever goes to a tmpfs: $XDG_RUNTIME_DIR for a user, /run
 # for root. A key written to a real disk and then unlinked is still a key
@@ -122,7 +122,7 @@ backup_walkthrough() {
   local key="$1" typed
   if ! interactive; then
     note "Public key: $(age-keygen -y <(printf '%s\n' "$key"))"
-    warn "Back up the private age key. On the machine it is in /var/lib/sops-nix/key.txt (root only) and ~/.config/sops/age/keys.txt; 'wasisabi-secrets backup' shows it."
+    warn "Back up the private age key. On the machine it is in /var/lib/sops-nix/key.txt (root only) and ~/.config/sops/age/keys.txt; 'wabisabi-secrets backup' shows it."
     return 0
   fi
 
@@ -148,8 +148,8 @@ backup_walkthrough() {
       break
     fi
     if [ -z "$typed" ]; then
-      if gum confirm --default=false "Continue WITHOUT a saved copy? You can show it again later with 'wasisabi-secrets backup'."; then
-        warn "No copy confirmed. Run 'wasisabi-secrets backup' soon."
+      if gum confirm --default=false "Continue WITHOUT a saved copy? You can show it again later with 'wabisabi-secrets backup'."; then
+        warn "No copy confirmed. Run 'wabisabi-secrets backup' soon."
         break
       fi
       continue
@@ -226,7 +226,7 @@ require_repo() {
 
 require_secrets() {
   require_repo
-  [ -f "$REPO/$SECRETS_REL" ] || die "no $SECRETS_REL in $REPO yet. Run 'wasisabi-secrets init' first."
+  [ -f "$REPO/$SECRETS_REL" ] || die "no $SECRETS_REL in $REPO yet. Run 'wabisabi-secrets init' first."
   [ -n "$(first_key "$USER_KEYS")" ] || die "no age key in $USER_KEYS. Put your saved key there (one line, AGE-SECRET-KEY-1...)."
 }
 
@@ -276,7 +276,7 @@ cmd_install_key() {
 
 cmd_init() {
   require_repo
-  [ ! -e "$REPO/$SECRETS_REL" ] || die "$REPO already has $SECRETS_REL. Use 'wasisabi-secrets edit' or 'password'."
+  [ ! -e "$REPO/$SECRETS_REL" ] || die "$REPO already has $SECRETS_REL. Use 'wabisabi-secrets edit' or 'password'."
   grep -qE "${ENABLE_LINE//./\\.}" "$REPO/configuration.nix" \
     || die "configuration.nix has no '$ENABLE_LINE' line, commented or not. Add it (inside the top-level attribute set) and run this again."
 
@@ -320,7 +320,7 @@ cmd_init() {
   # only, which is why this file can be committed.
   cat > "$REPO/.sops.yaml" <<EOF
 # Which age keys the secrets in this repo are encrypted to. Written by
-# wasisabi-secrets. Only the PUBLIC key is here; the private one is in
+# wabisabi-secrets. Only the PUBLIC key is here; the private one is in
 # ~/.config/sops/age/keys.txt and /var/lib/sops-nix/key.txt, never in the repo.
 #
 # To give another key access (a second machine, a backup key), add it below
@@ -364,7 +364,7 @@ private key, a reinstall comes back with the same password."
   note "Public key: $pub"
   if [ -z "$ROOT" ]; then
     note "Apply it with: sudo nixos-rebuild switch"
-    note "Change the password later with 'wasisabi-secrets password', not plain 'passwd'."
+    note "Change the password later with 'wabisabi-secrets password', not plain 'passwd'."
   fi
 }
 
@@ -412,5 +412,5 @@ case "$cmd" in
   keygen) cmd_keygen ;;
   install-key) cmd_install_key ;;
   -h|--help|help|"") usage ;;
-  *) echo "wasisabi-secrets: unknown command '$cmd'" >&2; usage >&2; exit 2 ;;
+  *) echo "wabisabi-secrets: unknown command '$cmd'" >&2; usage >&2; exit 2 ;;
 esac

@@ -1,5 +1,5 @@
 # The desktop's palettes, as data. Every app that draws colour reads its
-# colours from here through `wasisabi.theme`, so a palette is one attrset and
+# colours from here through `wabisabi.theme`, so a palette is one attrset and
 # not a hunt through a dozen config files.
 #
 # Hex without the leading '#', because the consumers disagree about it (niri

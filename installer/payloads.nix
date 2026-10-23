@@ -23,10 +23,10 @@
 let
   items = lib.concatMap (g: g.items) questions.groups;
 
-  # Only wasisabi's own options: the others (firmware, initrd modules) are
+  # Only wabisabi's own options: the others (firmware, initrd modules) are
   # target-hardware facts, not package choices.
   relevant = lib.filter (
-    i: i.emit != null && lib.hasPrefix "wasisabi." i.emit.attr && i.key != "system:enable"
+    i: i.emit != null && lib.hasPrefix "wabisabi." i.emit.attr && i.key != "system:enable"
   ) items;
 
   enums = lib.filter (i: i.kind == "enum") relevant;
@@ -53,10 +53,10 @@ let
     (nixosSystem {
       inherit system;
       specialArgs = {
-        wasisabi = self;
+        wabisabi = self;
       };
       modules = [
-        self.nixosModules.wasisabi
+        self.nixosModules.wabisabi
         homeManagerModule
         (
           { ... }:
@@ -86,11 +86,11 @@ let
             system.stateVersion = stateVersion;
 
             # AN OWNER, as every installed machine has one (the template sets
-            # wasisabi.user to the created account). It is a string option, so
+            # wabisabi.user to the created account). It is a string option, so
             # nothing above enumerates it; without it no payload carried the
             # owner's pi, wherever or memonaut, and an offline target had to
             # build them, and their toolchains, from source.
-            wasisabi = settingsFor "system" index // {
+            wabisabi = settingsFor "system" index // {
               user = "payload";
               # SECRETS, as the installer's recommended path sets them up.
               # sops-install-secrets is built by sops-nix against our nixpkgs
@@ -105,8 +105,8 @@ let
             sops.validateSopsFiles = false;
 
             home-manager.users.payload = {
-              imports = [ self.homeModules.wasisabi ];
-              wasisabi = settingsFor "home" index;
+              imports = [ self.homeModules.wabisabi ];
+              wabisabi = settingsFor "home" index;
             };
           }
         )

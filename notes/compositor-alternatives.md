@@ -1,6 +1,6 @@
 # Compositor alternatives
 
-Why wasisabi ships niri, what the runners-up were, and what it would cost to add one back. Written 2026-09-10 against nixpkgs `nixos-unstable` (the flake pin) and upstream release data fetched the same day. Versions below are what *this flake* would actually build, not what upstream has tagged.
+Why wabisabi ships niri, what the runners-up were, and what it would cost to add one back. Written 2026-09-10 against nixpkgs `nixos-unstable` (the flake pin) and upstream release data fetched the same day. Versions below are what *this flake* would actually build, not what upstream has tagged.
 
 Everything considered here is FSF-free, so rule 1 of this project does not narrow the field at all. The choice is about maintenance, ergonomics and taste.
 
@@ -12,7 +12,7 @@ Everything considered here is FSF-free, so rule 1 of this project does not narro
 - **Effects without a fork.** 26.04 mainlined blur, driven by the `ext-background-effect-v1` protocol, which clients (foot, kitty, Ghostty, Quickshell) request for themselves. Only KWin 6.7, Mutter 51 and niri implement it.
 - **Upstream Nix support.** `programs.niri` in nixpkgs handles session, systemd units, gnome-keyring and portal routing; `wayland.windowManager.niri` in home-manager handles config and xwayland-satellite.
 
-Costs we accepted: GPL-3.0-only rather than permissive (irrelevant here), a scrollable-column model that is genuinely different to learn, and animations that must be turned off on machines without an accelerated driver (hence `wasisabi.animations`).
+Costs we accepted: GPL-3.0-only rather than permissive (irrelevant here), a scrollable-column model that is genuinely different to learn, and animations that must be turned off on machines without an accelerated driver (hence `wabisabi.animations`).
 
 ## Sway, and the "no aesthetics is a feature" argument
 
@@ -22,7 +22,7 @@ Sway 1.12 (25 May 2026, 138 changes from 50 contributors, MIT) is the most conse
 
 **The "we can add the looks later" idea needs care.** Aesthetics on Wayland lives in three layers, and only two of them are addable:
 
-- **Layer A, client-side chrome:** bar, launcher, notifications, wallpaper, lock screen, GTK/Qt theme, cursors, fonts, terminal. Entirely compositor-independent. This is where most of the visual identity lives, and in wasisabi it is already isolated: the Catppuccin palette in `home/desktop.nix` feeds Waybar, mako, fuzzel, swaylock and GTK, and none of it knows what compositor is running. **This is the part worth protecting, and it survives any compositor swap.**
+- **Layer A, client-side chrome:** bar, launcher, notifications, wallpaper, lock screen, GTK/Qt theme, cursors, fonts, terminal. Entirely compositor-independent. This is where most of the visual identity lives, and in wabisabi it is already isolated: the Catppuccin palette in `home/desktop.nix` feeds Waybar, mako, fuzzel, swaylock and GTK, and none of it knows what compositor is running. **This is the part worth protecting, and it survives any compositor swap.**
 - **Layer B, compositor-drawn effects:** rounded corners, blur, shadows, animations, workspace overview. **There is no plugin API for Sway and upstream rejects these features by design.** You cannot add them with a package. It is fork-or-nothing.
 - **Layer C, protocol-driven effects:** `ext-background-effect-v1`, where the client asks and the compositor obliges. Sway does not implement it. Neither does Hyprland (as of the version tested upstream). niri does.
 
@@ -73,7 +73,7 @@ They provide dock, control centre, notification centre, overview and lock as com
 
 ## If we ever add a compositor option
 
-The shape would be `wasisabi.compositor = "niri" | "sway" | ...`, and the work is contained because the session is deliberately built out of generic parts. What is already portable: Waybar (it has first-class modules for sway, river, Hyprland, niri, mango, dwl and Wayfire), fuzzel, mako, swaylock, swayidle, the Catppuccin palette, the GTK theme, and grim/slurp/wf-recorder (niri implements `wlr-screencopy` v3, so they work unmodified).
+The shape would be `wabisabi.compositor = "niri" | "sway" | ...`, and the work is contained because the session is deliberately built out of generic parts. What is already portable: Waybar (it has first-class modules for sway, river, Hyprland, niri, mango, dwl and Wayfire), fuzzel, mako, swaylock, swayidle, the Catppuccin palette, the GTK theme, and grim/slurp/wf-recorder (niri implements `wlr-screencopy` v3, so they work unmodified).
 
 What is compositor-bound, and therefore all that a second backend needs to supply:
 

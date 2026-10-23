@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Publish, list and delete wasisabi's downloadable ISOs.
+# Publish, list and delete wabisabi's downloadable ISOs.
 #
 # The ISOs live in a Cloudflare R2 bucket, served at $DOWNLOADS (a custom
 # domain on the bucket), one folder per version, never changed once written:
 #
-#   v0.1.0/wasisabi-offline.iso
-#   v0.1.0/wasisabi-netinstall.iso
+#   v0.1.0/wabisabi-offline.iso
+#   v0.1.0/wabisabi-netinstall.iso
 #   v0.1.0/SHA256SUMS
 #   releases.json            what is downloadable, newest first; the website
 #                            reads it, so publishing needs no site rebuild
@@ -17,7 +17,7 @@
 #       GitHub release's notes (a second channel: a tampered bucket cannot
 #       also rewrite GitHub). Then keep only the newest N versions, default 1:
 #       older ones are deleted from the bucket. Anything deleted can be rebuilt
-#       from its tag (`nix build github:wighawag/wasisabi/vX.Y.Z#iso-offline`).
+#       from its tag (`nix build github:wighawag/wabisabi/vX.Y.Z#iso-offline`).
 #   scripts/release.sh delete 0.1.0 [--dry-run]
 #       Remove one version: its folder, and its entry in releases.json.
 #   scripts/release.sh list
@@ -25,14 +25,16 @@
 #
 # Credentials: an R2 API token with Object Read & Write on the bucket, as
 # R2_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, from the
-# environment or from ~/.config/wasisabi/r2.env (keep it mode 600). rclone
+# environment or from ~/.config/wabisabi/r2.env (keep it mode 600). rclone
 # does the uploads because a single R2 upload stops at 5 GiB and the offline
 # ISO is bigger: the S3 API's multipart upload has no such limit.
 set -euo pipefail
 
-BUCKET="${WASISABI_BUCKET:-wasisabi-releases}"
-DOWNLOADS="${WASISABI_DOWNLOADS:-https://downloads.wasisabi.org}"
-REPO="wighawag/wasisabi"
+# The bucket keeps the project's earlier name: R2 cannot rename a bucket, and
+# only the domain in front of it is public.
+BUCKET="${WABISABI_BUCKET:-wasisabi-releases}"
+DOWNLOADS="${WABISABI_DOWNLOADS:-https://downloads.wabisabi.computer}"
+REPO="wighawag/wabisabi"
 ISOS=(offline netinstall)
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -62,7 +64,7 @@ case "$cmd" in publish|delete) [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9
 [[ "$keep" =~ ^[1-9][0-9]*$ ]] || die "--keep takes a number of versions, at least 1"
 
 # ── R2 through rclone, configured from the environment (no config file) ────
-creds="${XDG_CONFIG_HOME:-$HOME/.config}/wasisabi/r2.env"
+creds="${XDG_CONFIG_HOME:-$HOME/.config}/wabisabi/r2.env"
 # shellcheck disable=SC1090
 [ -f "$creds" ] && . "$creds"
 if [ "$dry" = 0 ] || [ "$cmd" = list ]; then
@@ -137,7 +139,7 @@ case "$cmd" in
     : > "$work/SHA256SUMS"
     for kind in "${ISOS[@]}"; do
       iso=$(echo "$work/iso-$kind"/iso/*.iso)
-      name="wasisabi-$kind.iso"
+      name="wabisabi-$kind.iso"
       [ "$(basename "$iso")" = "$name" ] || die "expected $name, the build made $(basename "$iso")"
       sum=$(sha256sum "$iso" | cut -d' ' -f1)
       size=$(stat -Lc %s "$iso")
@@ -151,7 +153,7 @@ case "$cmd" in
     for kind in "${ISOS[@]}"; do
       iso=$(echo "$work/iso-$kind"/iso/*.iso)
       # Immutable: a version's files never change, so caches may keep them.
-      run rclone copyto "$iso" "$r2/v$version/wasisabi-$kind.iso" --progress \
+      run rclone copyto "$iso" "$r2/v$version/wabisabi-$kind.iso" --progress \
         --s3-chunk-size 64M --s3-upload-concurrency 4 \
         --header-upload "Content-Type: application/x-iso9660-image" \
         --header-upload "Cache-Control: public, max-age=31536000, immutable"
@@ -173,7 +175,7 @@ case "$cmd" in
     {
       echo "Downloads (checksums below, and in [SHA256SUMS]($DOWNLOADS/v$version/SHA256SUMS)):"
       echo
-      for kind in "${ISOS[@]}"; do echo "- [wasisabi-$kind.iso]($DOWNLOADS/v$version/wasisabi-$kind.iso)"; done
+      for kind in "${ISOS[@]}"; do echo "- [wabisabi-$kind.iso]($DOWNLOADS/v$version/wabisabi-$kind.iso)"; done
       echo
       echo '```'
       cat "$work/SHA256SUMS"
@@ -184,7 +186,7 @@ case "$cmd" in
     if gh release view "v$version" -R "$REPO" > /dev/null 2>&1; then
       run gh release edit "v$version" -R "$REPO" --notes-file "$work/notes.md"
     else
-      run gh release create "v$version" -R "$REPO" --verify-tag --prerelease --title "wasisabi $version" --notes-file "$work/notes.md"
+      run gh release create "v$version" -R "$REPO" --verify-tag --prerelease --title "wabisabi $version" --notes-file "$work/notes.md"
     fi
     say "published v$version (keeping $keep version(s))"
     ;;

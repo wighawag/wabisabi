@@ -7,7 +7,7 @@ spotted: 2026-09-28
 
 # A username that is a common word fails the anon-home content check
 
-Seen while building the restore VM test (2026-09-28). A config whose owner is `wasisabi.user = "owner"` does not build: nixos-modules' `anonHome` assertion reports that `.bash_profile` for an anon home "contains \"owner\"". The check (nixos-modules `modules/anon-home*.nix`) scans the files it places into anon homes for the operator's username as a plain substring, and the literal word "owner" occurs in that file's text (most likely a comment). So the collision is with prose, not with anything that leaks the account.
+Seen while building the restore VM test (2026-09-28). A config whose owner is `wabisabi.user = "owner"` does not build: nixos-modules' `anonHome` assertion reports that `.bash_profile` for an anon home "contains \"owner\"". The check (nixos-modules `modules/anon-home*.nix`) scans the files it places into anon homes for the operator's username as a plain substring, and the literal word "owner" occurs in that file's text (most likely a comment). So the collision is with prose, not with anything that leaks the account.
 
 Why it matters:
 

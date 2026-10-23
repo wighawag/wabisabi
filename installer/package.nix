@@ -1,7 +1,7 @@
 # The installer as a package: two entry points and the data they need.
 #
-#   wasisabi-install  the TUI (and the unattended --answers path)
-#   wasisabi-emit     the template renderer, on its own, so the emit step can
+#   wabisabi-install  the TUI (and the unattended --answers path)
+#   wabisabi-emit     the template renderer, on its own, so the emit step can
 #                     be run and diffed without a disk anywhere near it
 #
 # Everything variable is baked in here rather than looked up at runtime: the
@@ -49,7 +49,7 @@
 
 let
   emit = writeShellApplication {
-    name = "wasisabi-emit";
+    name = "wabisabi-emit";
     runtimeInputs = [
       bash
       coreutils
@@ -69,7 +69,7 @@ let
   };
 
   install = writeShellApplication {
-    name = "wasisabi-install";
+    name = "wabisabi-install";
     runtimeInputs = [
       age
       bash
@@ -99,33 +99,33 @@ let
       util-linux
     ];
     text = ''
-      export WASISABI_QUESTIONS=${questions}
-      export WASISABI_TEMPLATE=${template}
-      export WASISABI_EMIT=${./emit.sh}
-      export WASISABI_LOCK=${targetLock}/flake.lock
-      export WASISABI_URL=${targetLock.url}
-      export WASISABI_DISKO=${./disko}
+      export WABISABI_QUESTIONS=${questions}
+      export WABISABI_TEMPLATE=${template}
+      export WABISABI_EMIT=${./emit.sh}
+      export WABISABI_LOCK=${targetLock}/flake.lock
+      export WABISABI_URL=${targetLock.url}
+      export WABISABI_DISKO=${./disko}
       # disko evaluates its own config at runtime with `import <nixpkgs>`, and
       # a systemd unit inherits no NIX_PATH at all, so the sources travel with
       # the installer instead of being looked up in the environment.
-      export WASISABI_NIXPKGS=${nixpkgsSource}
-      export WASISABI_STATE_VERSION=${stateVersion}
-      export WASISABI_OFFLINE=${if offline then "1" else "0"}
+      export WABISABI_NIXPKGS=${nixpkgsSource}
+      export WABISABI_STATE_VERSION=${stateVersion}
+      export WABISABI_OFFLINE=${if offline then "1" else "0"}
       exec ${lib.getExe bash} ${./install.sh} "$@"
     '';
   };
 in
 
 symlinkJoin {
-  name = "wasisabi-installer";
+  name = "wabisabi-installer";
   paths = [
     install
     emit
-    # On the medium's PATH too, for `wasisabi-secrets keygen` by hand.
+    # On the medium's PATH too, for `wabisabi-secrets keygen` by hand.
     secretsTool
   ];
   meta = {
-    description = "Interactive installer for a wasisabi machine";
-    mainProgram = "wasisabi-install";
+    description = "Interactive installer for a wabisabi machine";
+    mainProgram = "wabisabi-install";
   };
 }

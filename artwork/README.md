@@ -1,6 +1,6 @@
 # artwork
 
-wasisabi's images: the default wallpaper and the boot splash, plus the mark they share, an enso (the Zen brush circle, drawn in one breath and left imperfect).
+wabisabi's images: the default wallpaper and the boot splash, plus the mark they share, an enso (the Zen brush circle, drawn in one breath and left imperfect).
 
 | Path | Kind | Made by |
 |---|---|---|
@@ -14,13 +14,13 @@ wasisabi's images: the default wallpaper and the boot splash, plus the mark they
 | `wallpapers/enso.jpg` | authored | the default wallpaper |
 | `wallpapers/LICENSE` | | CC0 1.0, verbatim |
 
-`pkgs/wasisabi-artwork` installs these where their consumers look; `pkgs/wasisabi-grub-theme` derives the ISO's boot menu from the wallpaper at build time, so a new wallpaper is a new menu without touching this folder.
+`pkgs/wabisabi-artwork` installs these where their consumers look; `pkgs/wabisabi-grub-theme` derives the ISO's boot menu from the wallpaper at build time, so a new wallpaper is a new menu without touching this folder.
 
 Drift check: `./generate.sh && git diff --exit-code artwork`. The output is deterministic (seeded PRNG, 8-bit PNGs written without timestamps), so any diff means the committed files no longer match their source.
 
 ## Licence
 
-All wallpapers are dedicated to the public domain under **CC0 1.0** (`wallpapers/LICENSE`), as is everything generated here. They were made with an image model; whatever rights their author holds in them are waived, so they can be used, changed and redistributed without asking and without attribution. `meta.license` of `pkgs/wasisabi-artwork` says the same to Nix.
+All wallpapers are dedicated to the public domain under **CC0 1.0** (`wallpapers/LICENSE`), as is everything generated here. They were made with an image model; whatever rights their author holds in them are waived, so they can be used, changed and redistributed without asking and without attribution. `meta.license` of `pkgs/wabisabi-artwork` says the same to Nix.
 
 ## Decisions that are easy to undo by mistake
 

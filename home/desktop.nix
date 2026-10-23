@@ -10,9 +10,9 @@
 # default and what the alternatives would cost.
 
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
 
-  # The palette, from theme/palettes.nix via `wasisabi.theme` (sumi by
+  # The palette, from theme/palettes.nix via `wabisabi.theme` (sumi by
   # default, Catppuccin Mocha as a choice). Compositor-independent: it themes
   # the bar, launcher, notifications, lock screen and GTK, none of which know
   # what compositor they are running under.
@@ -22,7 +22,7 @@ let
   # The wallpaper at a path that survives the image changing (see
   # wallpaperPath in modules/desktop.nix for why a store path will not do).
   wallpaperExt = let m = builtins.match ".*(\\.[A-Za-z0-9]+)" (toString cfg.wallpaper); in if m == null then "" else lib.head m;
-  wallpaperFile = "wasisabi/wallpaper${wallpaperExt}";
+  wallpaperFile = "wabisabi/wallpaper${wallpaperExt}";
   wallpaperPath = "${config.xdg.dataHome}/${wallpaperFile}";
 
   # Sumi for GTK3 (adw-gtk3) and GTK4 (libadwaita): their named colours.
@@ -112,7 +112,7 @@ let
   # need no script: niri has a built-in screenshot UI that saves to
   # screenshot-path and copies to the clipboard in one action.
   recordScript = pkgs.writeShellApplication {
-    name = "wasisabi-record";
+    name = "wabisabi-record";
     runtimeInputs = [ pkgs.wf-recorder pkgs.libnotify ];
     text = ''
       if pkill -INT wf-recorder 2>/dev/null; then
@@ -155,7 +155,7 @@ lib.mkIf cfg.enable {
           tap = { };
           natural-scroll = { };
         };
-        # Primary modifier — from wasisabi.modKey (default SUPER; the demo
+        # Primary modifier — from wabisabi.modKey (default SUPER; the demo
         # VM uses ALT because host desktops swallow Super combos before
         # QEMU sees them).
         mod-key = niriModKey;

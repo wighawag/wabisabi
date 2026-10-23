@@ -7,15 +7,15 @@ the module shapes.
 
 ## The seam
 
-The product is two plain flake-module outputs, `nixosModules.wasisabi`
-(system) and `homeModules.wasisabi` (user). Three properties make them
+The product is two plain flake-module outputs, `nixosModules.wabisabi`
+(system) and `homeModules.wabisabi` (user). Three properties make them
 importable into a config you don't control:
 
 - **No `pkgs` opinion.** Modules take `pkgs` from whichever `nixosSystem`
   imports them; nothing from this repo's lock (nixpkgs unstable) enters the
-  consumer's closure. `inputs.wasisabi.inputs.nixpkgs.follows = "nixpkgs"`
+  consumer's closure. `inputs.wabisabi.inputs.nixpkgs.follows = "nixpkgs"`
   is hygiene for locking, not correctness.
-- **Inert until opted in.** Everything is gated behind `wasisabi.enable`
+- **Inert until opted in.** Everything is gated behind `wabisabi.enable`
   (per layer, so a host can take one without the other), so the module can
   be imported fleet-wide and enabled per machine.
 - **Loses every merge.** Every value is `mkDefault`, so the importing config
@@ -29,9 +29,9 @@ recipe. This note records what was actually proven and what was found.
 
 - **The template scaffolds a machine that evaluates — after one fix.**
   `nix flake new -t .` + a stub `hardware-configuration.nix` failed with
-  `The option 'wasisabi' does not exist`: `template/flake.nix` listed
+  `The option 'wabisabi' does not exist`: `template/flake.nix` listed
   `./configuration.nix` and home-manager but never
-  `wasisabi.nixosModules.wasisabi`, so `wasisabi.enable = true` in
+  `wabisabi.nixosModules.wabisabi`, so `wabisabi.enable = true` in
   configuration.nix targeted an option nobody imported. Fixed by adding the
   module to the template's module list; the scaffolded machine then
   evaluates (and this repo's `nix flake check` still passes).
@@ -43,13 +43,13 @@ recipe. This note records what was actually proven and what was found.
   ```nix
   myboxes.nixosConfigurations.telemaque.extendModules {
     modules = [
-      wasisabi.nixosModules.wasisabi
+      wabisabi.nixosModules.wabisabi
       home-manager.nixosModules.home-manager
       {
-        wasisabi.enable = true;
+        wabisabi.enable = true;
         home-manager.users.wighawag = {
-          imports = [ wasisabi.homeModules.wasisabi ];
-          wasisabi.enable = true;
+          imports = [ wabisabi.homeModules.wabisabi ];
+          wabisabi.enable = true;
         };
       }
     ];
@@ -113,5 +113,5 @@ master is the simpler deal; revisit if that changes.
   not created; the compose test deliberately reuses telemaque's own host
   file rather than a reduced one.
 - **The home layer standalone** (home-manager on a non-NixOS distro, the
-  README's claim that `homeModules.wasisabi` is usable by itself): never
+  README's claim that `homeModules.wabisabi` is usable by itself): never
   evaluated outside a NixOS integration.

@@ -1,4 +1,4 @@
-// The enso: wasisabi's mark, and the motif of its default wallpaper. One
+// The enso: wabisabi's mark, and the motif of its default wallpaper. One
 // brush circle, drawn as several parallel "bristle" strands that sit edge to
 // edge for most of the sweep and part near the end, which is what a dry brush
 // does. At 16px the strands merge into one band, so small sizes need no

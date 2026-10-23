@@ -1,5 +1,5 @@
 {
-  description = "wasisabi: an opinionated, libre-only Wayland desktop, distributed as NixOS + home-manager modules";
+  description = "wabisabi: an opinionated, libre-only Wayland desktop, distributed as NixOS + home-manager modules";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -20,8 +20,8 @@
 
     # The agent layer's building blocks (local model, search, pi, wherever,
     # the anon accounts, the interactive bash) and the packages they run.
-    # They live in their own repository so machines that are not wasisabi
-    # desktops can use them too; wasisabi's modules/agents.nix switches them
+    # They live in their own repository so machines that are not wabisabi
+    # desktops can use them too; wabisabi's modules/agents.nix switches them
     # on. Following our nixpkgs keeps one nixpkgs in the lock (the modules take
     # `pkgs` from the importing system anyway).
     nixos-modules = {
@@ -81,9 +81,9 @@
 
       # ── the installer, generated from the options ──
       questions = import ./installer/questions.nix { inherit lib; };
-      questionsJson = pkgs.writeText "wasisabi-questions.json" (builtins.toJSON questions);
+      questionsJson = pkgs.writeText "wabisabi-questions.json" (builtins.toJSON questions);
       targetLock = pkgs.callPackage ./installer/lock.nix { inherit self; };
-      secretsTool = pkgs.callPackage ./pkgs/wasisabi-secrets/package.nix { };
+      secretsTool = pkgs.callPackage ./pkgs/wabisabi-secrets/package.nix { };
 
       mkInstaller =
         { offline }:
@@ -111,7 +111,7 @@
       # plain and LUKS runs cannot drift apart.
       autotestAnswers =
         diskLayout:
-        pkgs.runCommand "wasisabi-autotest-answers-${diskLayout}.json" { nativeBuildInputs = [ pkgs.jq ]; }
+        pkgs.runCommand "wabisabi-autotest-answers-${diskLayout}.json" { nativeBuildInputs = [ pkgs.jq ]; }
           ''
             jq '.["disk:layout"] = "${diskLayout}"
                 | .["disk:passphrase"] = "testpassphrase"' \
@@ -124,7 +124,7 @@
       # hostname and user are ones the restore answers never mention, so a
       # restored machine that has them can only have read them from the repo.
       restoreFixture =
-        pkgs.runCommand "wasisabi-restore-fixture"
+        pkgs.runCommand "wabisabi-restore-fixture"
           {
             nativeBuildInputs = [
               pkgs.git
@@ -140,7 +140,7 @@
             mkdir -p $out
             bash ${./installer/emit.sh} --questions ${questionsJson} --answers answers.json \
               --template ${./template} --out $out --state-version ${release} \
-              --wasisabi-url ${targetLock.url}
+              --wabisabi-url ${targetLock.url}
             install -m 0644 ${targetLock}/flake.lock $out/flake.lock
             # A stand-in: the restore replaces it with the real machine's.
             install -m 0644 ${./installer/test-hardware.nix} $out/hardware-configuration.nix
@@ -152,7 +152,7 @@
               --key-file ${./installer/test-age-key.txt} --password-hash-file $TMPDIR/hash --yes
           '';
 
-      restoreAnswers = pkgs.writeText "wasisabi-autotest-answers-restore.json" (
+      restoreAnswers = pkgs.writeText "wabisabi-autotest-answers-restore.json" (
         builtins.toJSON {
           "install:mode" = "restore";
           "restore:source" = "${restoreFixture}";
@@ -166,13 +166,13 @@
         }
       );
 
-      # A FLEET repo to restore from: two hosts, the wasisabi one declaring
+      # A FLEET repo to restore from: two hosts, the wabisabi one declaring
       # its disks with disko, decrypting with its SSH host key, taking its
       # password from its own secret, and keeping its private host key in the
       # repo encrypted to the admin key (the test key) only. my-boxes' nono,
       # in miniature. See installer/test-fleet/hosts/laptop/default.nix.
       restoreFleetFixture =
-        pkgs.runCommand "wasisabi-restore-fleet-fixture"
+        pkgs.runCommand "wabisabi-restore-fleet-fixture"
           {
             nativeBuildInputs = [
               pkgs.age
@@ -188,7 +188,7 @@
             cp -r ${./installer/test-fleet} $out
             chmod -R u+w $out
             cd $out
-            sed -i "s#WASISABI_URL#${targetLock.url}#" flake.nix
+            sed -i "s#WABISABI_URL#${targetLock.url}#" flake.nix
             sed -i "s#CHANGEME_STATE_VERSION#${release}#" hosts/laptop/default.nix
             install -m 0644 ${targetLock}/flake.lock flake.lock
 
@@ -225,7 +225,7 @@
             git -c user.name=t -c user.email=t@t commit -q -m "A two-host fleet"
           '';
 
-      restoreFleetAnswers = pkgs.writeText "wasisabi-autotest-answers-restore-fleet.json" (
+      restoreFleetAnswers = pkgs.writeText "wabisabi-autotest-answers-restore-fleet.json" (
         builtins.toJSON {
           "install:mode" = "restore";
           "restore:source" = "${restoreFleetFixture}";
@@ -252,9 +252,9 @@
             # anyway, so booting into it costs little, and it lets the machine
             # be tried before anything touches its disk (hosts/live.nix).
             live = offline;
-            wasisabiModules = {
-              system = self.nixosModules.wasisabi;
-              home = self.homeModules.wasisabi;
+            wabisabiModules = {
+              system = self.nixosModules.wabisabi;
+              home = self.homeModules.wabisabi;
               homeManager = home-manager.nixosModules.home-manager;
             };
             installer = mkInstaller { inherit offline; };
@@ -272,7 +272,7 @@
               disko
               nixos-hardware
             ];
-            wasisabiRev = self.rev or "dirty";
+            wabisabiRev = self.rev or "dirty";
             payloads = lib.optionals offline payloads.toplevels;
           };
           modules = [ ./hosts/iso.nix ];
@@ -284,7 +284,7 @@
       # actually took effect. This is the join between template/ and the
       # installer: if either drifts, this stops evaluating or stops matching.
       emitted =
-        pkgs.runCommand "wasisabi-emitted-flake"
+        pkgs.runCommand "wabisabi-emitted-flake"
           {
             nativeBuildInputs = [
               pkgs.jq
@@ -305,7 +305,7 @@
       # installer runs it, with the published test key. What comes out is the
       # two-commit repo an installed machine starts from.
       emittedWithSecrets =
-        pkgs.runCommand "wasisabi-emitted-flake-secrets"
+        pkgs.runCommand "wabisabi-emitted-flake-secrets"
           {
             nativeBuildInputs = [
               pkgs.git
@@ -337,10 +337,10 @@
       emittedSecretsSystem = nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = {
-          wasisabi = self;
+          wabisabi = self;
         };
         modules = [
-          self.nixosModules.wasisabi
+          self.nixosModules.wabisabi
           home-manager.nixosModules.home-manager
           "${emittedWithSecrets}/configuration.nix"
         ];
@@ -349,10 +349,10 @@
       emittedSystem = nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = {
-          wasisabi = self;
+          wabisabi = self;
         };
         modules = [
-          self.nixosModules.wasisabi
+          self.nixosModules.wabisabi
           home-manager.nixosModules.home-manager
           "${emitted}/configuration.nix"
         ];
@@ -364,12 +364,12 @@
       #
       # It includes nixos-modules' building blocks, which modules/agents.nix
       # switches on; a consumer imports this one module and gets both.
-      nixosModules.wasisabi = {
+      nixosModules.wabisabi = {
         imports = [
           ./modules
           nixos-modules.nixosModules.default
-          # For wasisabi.secrets (modules/secrets.nix). A config that already
-          # imports sops-nix should make wasisabi's input follow its own, so
+          # For wabisabi.secrets (modules/secrets.nix). A config that already
+          # imports sops-nix should make wabisabi's input follow its own, so
           # both imports are the same path and the module system dedups them.
           sops-nix.nixosModules.sops
         ];
@@ -377,7 +377,7 @@
 
       # User-level layer: apps, dotfiles, keybinds, theming.
       # Also usable standalone with home-manager on any distro.
-      homeModules.wasisabi = {
+      homeModules.wabisabi = {
         imports = [ ./home ];
         # Injected rather than fetched inside the module, so the pin lives in
         # flake.lock (updatable with `nix flake update noctalia`) and consumers
@@ -392,25 +392,25 @@
         specialArgs = { inherit self; };
         modules = [
           home-manager.nixosModules.home-manager
-          self.nixosModules.wasisabi
+          self.nixosModules.wabisabi
           (
             { config, ... }:
             {
               # Wire the home layer for the demo user.
               home-manager.users.demo = {
-                imports = [ self.homeModules.wasisabi ];
-                wasisabi.enable = true;
+                imports = [ self.homeModules.wabisabi ];
+                wabisabi.enable = true;
                 # QEMU on a desktop host: your compositor eats Super+key before the
                 # VM can see it. Use ALT in the VM; back to SUPER on real hardware.
-                wasisabi.modKey = "ALT";
+                wabisabi.modKey = "ALT";
                 # The demo VM renders through VirGL, which is a real GL stack but
                 # not a fast one. Animations are full-screen redraws; turn them off.
-                wasisabi.animations = false;
+                wabisabi.animations = false;
                 # Ghostty compiles its shaders on first launch, which on a virtual
                 # GPU takes ~35s before a window appears. foot is CPU-rendered and
                 # opens instantly, which is what you want when kicking the tyres.
                 # On real hardware the default (ghostty) is fine.
-                wasisabi.terminal = "foot";
+                wabisabi.terminal = "foot";
               };
             }
           )
@@ -457,7 +457,7 @@
         installer = mkInstaller { offline = false; };
         questions = questionsJson;
         target-lock = targetLock;
-        wasisabi-secrets = secretsTool;
+        wabisabi-secrets = secretsTool;
         iso-netinstall = self.nixosConfigurations.isoNetinstall.config.system.build.isoImage;
         iso-offline = self.nixosConfigurations.isoOffline.config.system.build.isoImage;
         iso-autotest = self.nixosConfigurations.isoAutotest.config.system.build.isoImage;
@@ -472,7 +472,7 @@
       checks.${system} =
         let
           c = emittedSystem.config;
-          home = c.home-manager.users.wighawag.wasisabi;
+          home = c.home-manager.users.wighawag.wabisabi;
 
           # Answers from installer/test-answers.json, and what each one should
           # have done to the evaluated system.
@@ -523,24 +523,24 @@
               actual = c.services.tor.enable;
             }
             {
-              name = "the owner is the created user (wasisabi.user)";
+              name = "the owner is the created user (wabisabi.user)";
               expected = "wighawag";
-              actual = c.wasisabi.user;
+              actual = c.wabisabi.user;
             }
             {
               name = "an unanswered agent option keeps the project default (local model on)";
               expected = true;
-              actual = c.systemd.services ? wasisabi-llm;
+              actual = c.systemd.services ? wabisabi-llm;
             }
             {
               name = "the owner may reach the local model's socket";
               expected = true;
-              actual = lib.elem "wasisabi-llm" c.users.users.wighawag.extraGroups;
+              actual = lib.elem "wabisabi-llm" c.users.users.wighawag.extraGroups;
             }
             {
               name = "the owner's pi gets the local-model extension";
               expected = true;
-              actual = c.environment.etc ? "wasisabi/pi-extensions/pi-wasisabi-local";
+              actual = c.environment.etc ? "wabisabi/pi-extensions/pi-wabisabi-local";
             }
             {
               name = "search through Tor, answered, reaches SearXNG";
@@ -598,7 +598,7 @@
               actual = home.apps.office;
             }
             # test-answers.json deliberately leaves these two out, one per
-            # layer: an option nobody answered must keep tracking wasisabi's
+            # layer: an option nobody answered must keep tracking wabisabi's
             # default rather than being frozen into the generated config.
             {
               name = "an unanswered home option keeps the project default";
@@ -618,12 +618,12 @@
             {
               name = "without the secrets step, no secrets are configured";
               expected = null;
-              actual = c.wasisabi.secrets.sopsFile;
+              actual = c.wabisabi.secrets.sopsFile;
             }
             {
               name = "unanswered options are not written into the config";
               expected = false;
-              actual = lib.hasInfix "wasisabi.editor" (builtins.readFile "${emitted}/configuration.nix");
+              actual = lib.hasInfix "wabisabi.editor" (builtins.readFile "${emitted}/configuration.nix");
             }
           ];
 
@@ -632,7 +632,7 @@
             {
               name = "the secrets step enables the secrets file";
               expected = true;
-              actual = s.wasisabi.secrets.sopsFile != null;
+              actual = s.wabisabi.secrets.sopsFile != null;
             }
             {
               name = "sops-nix reads the machine's age key, and only that";
@@ -674,11 +674,11 @@
           agentClaims = [
             {
               name = "the model server has no network at all";
-              ok = d.systemd.services.wasisabi-llm.serviceConfig.PrivateNetwork;
+              ok = d.systemd.services.wabisabi-llm.serviceConfig.PrivateNetwork;
             }
             {
               name = "the model is served on a unix socket";
-              ok = lib.hasInfix "--host /run/wasisabi-llm/llm.sock" d.systemd.services.wasisabi-llm.serviceConfig.ExecStart;
+              ok = lib.hasInfix "--host /run/wabisabi-llm/llm.sock" d.systemd.services.wabisabi-llm.serviceConfig.ExecStart;
             }
             {
               name = "the declared anon slots exist with their pinned uids";
@@ -689,7 +689,7 @@
             }
             {
               name = "every anon slot may reach the model socket (no jail exemption needed)";
-              ok = lib.all (a: lib.elem "wasisabi-llm" d.users.users.${a}.extraGroups) [
+              ok = lib.all (a: lib.elem "wabisabi-llm" d.users.users.${a}.extraGroups) [
                 "anon"
                 "anon-john"
                 "anon-jane"
@@ -701,7 +701,7 @@
             }
             {
               name = "anon sessions load the local-model extension from the store";
-              ok = lib.any (p: lib.hasInfix "pi-wasisabi-local" p) anonHomeSettings.packages;
+              ok = lib.any (p: lib.hasInfix "pi-wabisabi-local" p) anonHomeSettings.packages;
             }
             {
               name = "the anon dispatcher binds loopback only";
@@ -726,23 +726,23 @@
                 let
                   h = d.home-manager.users.demo;
                 in
-                h.xdg.desktopEntries ? wasisabi-assistant
+                h.xdg.desktopEntries ? wabisabi-assistant
                 && h.wayland.windowManager.niri.settings.binds ? "Mod+A"
-                && h.systemd.user.services ? wasisabi-assistant-welcome;
+                && h.systemd.user.services ? wabisabi-assistant-welcome;
             }
             {
               name = "the assistant's URL (and so its token) is resolved at click time, never baked in";
               ok =
                 let
                   h = d.home-manager.users.demo;
-                  exec = h.xdg.desktopEntries.wasisabi-assistant.exec;
+                  exec = h.xdg.desktopEntries.wabisabi-assistant.exec;
                 in
-                lib.hasSuffix "/bin/wasisabi-assistant" exec
+                lib.hasSuffix "/bin/wabisabi-assistant" exec
                 && h.wayland.windowManager.niri.settings.binds."Mod+A".spawn == exec;
             }
             {
               name = "enrolment never holds up the boot";
-              ok = !(lib.elem "multi-user.target" (d.systemd.services.wasisabi-anon-enroll.wantedBy or [ ]));
+              ok = !(lib.elem "multi-user.target" (d.systemd.services.wabisabi-anon-enroll.wantedBy or [ ]));
             }
           ];
           # The interactive bash stack's ORDER, read from the generated
@@ -789,9 +789,9 @@
         in
         {
           agent-layer = lib.throwIf (agentFailures != [ ]) ''
-            wasisabi: the agent layer no longer holds these claims on the demo host:
+            wabisabi: the agent layer no longer holds these claims on the demo host:
               ${lib.concatStringsSep "\n  " agentFailures}
-          '' pkgs.writeText "wasisabi-agent-layer" (lib.concatMapStringsSep "\n" (c: c.name) (agentClaims ++ shellClaims));
+          '' pkgs.writeText "wabisabi-agent-layer" (lib.concatMapStringsSep "\n" (c: c.name) (agentClaims ++ shellClaims));
 
           # `niri validate` runs inside this derivation, which is the reason
           # the compositor was chosen. Until it was a check, nothing in
@@ -802,18 +802,18 @@
           installer-questions = questionsJson;
 
           installer-lint =
-            pkgs.runCommand "wasisabi-installer-lint" { nativeBuildInputs = [ pkgs.shellcheck ]; }
+            pkgs.runCommand "wabisabi-installer-lint" { nativeBuildInputs = [ pkgs.shellcheck ]; }
               ''
                 shellcheck --shell=bash --severity=style \
                   ${./installer/install.sh} ${./installer/emit.sh} \
-                  ${./pkgs/wasisabi-secrets/wasisabi-secrets.sh}
+                  ${./pkgs/wabisabi-secrets/wabisabi-secrets.sh}
                 touch $out
               '';
 
           emit-roundtrip = lib.throwIf (failures != [ ]) ''
-            wasisabi: the installer emitted a config that does not do what was answered:
+            wabisabi: the installer emitted a config that does not do what was answered:
               ${report}
-          '' pkgs.runCommand "wasisabi-emit-roundtrip" { } ''
+          '' pkgs.runCommand "wabisabi-emit-roundtrip" { } ''
             # Referencing the toplevel's drvPath forces the whole generated
             # configuration to EVALUATE (so a broken option fails here) while
             # deliberately not building the desktop, which is what the VM
@@ -831,7 +831,7 @@
 
           # The offline ISO's claim, checked: every value of every enum
           # appears in some payload.
-          payload-coverage = pkgs.writeText "wasisabi-payload-coverage.json" (
+          payload-coverage = pkgs.writeText "wabisabi-payload-coverage.json" (
             builtins.toJSON {
               inherit (payloads) count coverage;
             }
@@ -843,10 +843,10 @@
 
       # The "installer experience" for people who would rather not use an ISO:
       # scaffolds the same flake the installer writes.
-      #   nix flake new -t github:wighawag/wasisabi ~/systems/my-laptop
+      #   nix flake new -t github:wighawag/wabisabi ~/systems/my-laptop
       templates.default = {
         path = ./template;
-        description = "A new machine on wasisabi: fill in your username, drop in hardware-configuration.nix, rebuild.";
+        description = "A new machine on wabisabi: fill in your username, drop in hardware-configuration.nix, rebuild.";
       };
     };
 }

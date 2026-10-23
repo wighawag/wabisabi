@@ -1,8 +1,8 @@
 { lib, pkgs, ... }:
 
 {
-  options.wasisabi = {
-    enable = lib.mkEnableOption "the wasisabi system layer";
+  options.wabisabi = {
+    enable = lib.mkEnableOption "the wabisabi system layer";
 
     enforceLibre = lib.mkOption {
       type = lib.types.bool;
@@ -35,7 +35,7 @@
         that still works when the graphics stack is the thing that is broken
         -- which is why it stays available rather than being deleted.
 
-        This pairs with the HOME-layer `wasisabi.shell` option but is
+        This pairs with the HOME-layer `wabisabi.shell` option but is
         deliberately independent of it: the greeter runs as its own user
         before any home configuration exists, so the two cannot read each
         other and a fleet may reasonably want a text greeter with a graphical
@@ -74,7 +74,7 @@
         The palette the whole desktop is drawn in: boot splash, greeter,
         shell, terminals, GTK, editors. Defined in theme/palettes.nix.
 
-        "sumi" (ink) is wasisabi's own, sampled from the default wallpaper:
+        "sumi" (ink) is wabisabi's own, sampled from the default wallpaper:
         indigo ink and warm paper. "catppuccin-mocha" is the previous default.
 
         The home layer follows this value unless it sets its own.
@@ -83,8 +83,8 @@
 
     wallpaper = lib.mkOption {
       type = lib.types.path;
-      default = "${pkgs.callPackage ../pkgs/wasisabi-artwork/package.nix { }}/share/backgrounds/wasisabi/enso.jpg";
-      defaultText = lib.literalExpression ''"''${wasisabi-artwork}/share/backgrounds/wasisabi/enso.jpg"'';
+      default = "${pkgs.callPackage ../pkgs/wabisabi-artwork/package.nix { }}/share/backgrounds/wabisabi/enso.jpg";
+      defaultText = lib.literalExpression ''"''${wabisabi-artwork}/share/backgrounds/wabisabi/enso.jpg"'';
       description = ''
         The desktop's wallpaper, also used by the greeter and the lock screen.
         The default is the enso risograph print (CC0, artwork/wallpapers).
@@ -122,7 +122,7 @@
         Driverless is not merely the tidy option here, it is what keeps
         printing COMPATIBLE WITH THE LIBRE RULE. Most vendor PPDs and filters
         in nixpkgs are unfree (Epson's escpr2, for one), so a driver-based
-        setup would force a wasisabi user to choose between printing and
+        setup would force a wabisabi user to choose between printing and
         `enforceLibre`. Asking the printer to describe itself over IPP removes
         that choice instead of trading it away.
 
@@ -262,7 +262,7 @@
         Only at a real terminal: a script, an agent's tool shell or anything
         reporting TERM=dumb gets plain bash, so agents' commands never land in
         your history. The prompt's shapes and icons need a Nerd Font in the
-        terminal, which wasisabi installs and its terminals use.
+        terminal, which wabisabi installs and its terminals use.
       '';
     };
 
@@ -286,7 +286,7 @@
     };
 
     # ── Secrets: sops-encrypted values in the owner's own flake. See
-    # modules/secrets.nix and `wasisabi-secrets --help`.
+    # modules/secrets.nix and `wabisabi-secrets --help`.
 
     secrets.sopsFile = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
@@ -296,7 +296,7 @@
         The machine's sops-encrypted secrets file, committed to its flake. Null
         (the default) leaves secrets off entirely.
 
-        Set by `wasisabi-secrets init`, which the installer runs for you:
+        Set by `wabisabi-secrets init`, which the installer runs for you:
         it creates an age key, encrypts the file to it and uncomments this
         line in configuration.nix. The file is safe to publish; only the age
         key can read it, and the key lives outside the flake (see
@@ -325,7 +325,7 @@
 
         This is what makes a reinstall from the flake log in with the same
         password. NixOS applies it when the account is CREATED; on an existing
-        machine, `wasisabi-secrets password` changes both the secret and the
+        machine, `wabisabi-secrets password` changes both the secret and the
         live password, whereas plain `passwd` changes only the live one.
       '';
     };
@@ -377,7 +377,7 @@
         than to an age key file. Such a machine can decrypt nothing until
         that host key is back, so the repo keeps the private key encrypted to
         the admin key and a restore puts it at /etc/ssh before activation.
-        A config set up by `wasisabi-secrets` needs none of this: its key is
+        A config set up by `wabisabi-secrets` needs none of this: its key is
         the one the restore is given.
       '';
     };
@@ -499,7 +499,7 @@
         since they are refused the system bus (along with the other root-side
         services that could send traffic for them outside Tor).
 
-        Runs the Tor client even if wasisabi.tor.enable is off, since it is
+        Runs the Tor client even if wabisabi.tor.enable is off, since it is
         their only way out (so a Tor SOCKS port on 127.0.0.1:9050 exists for
         every local account too, as with that option). Changes how this machine
         resolves hostnames (systemd-resolved, nscd not answering host lookups),

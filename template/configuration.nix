@@ -1,14 +1,14 @@
-{ wasisabi, ... }:
+{ wabisabi, ... }:
 
-# Your machine-specific config: identity, hardware file, and the wasisabi
-# layers on top. Everything wasisabi sets is a mkDefault, so anything you
+# Your machine-specific config: identity, hardware file, and the wabisabi
+# layers on top. Everything wabisabi sets is a mkDefault, so anything you
 # write here wins.
 #
-# If the wasisabi installer wrote this file, it filled in the placeholders and
+# If the wabisabi installer wrote this file, it filled in the placeholders and
 # the two answer blocks below and then got out of the way. There is no
 # machine-managed state here and nothing reads it back: it is an ordinary
 # NixOS module that you own. Edit it, delete lines, override anything, or
-# remove wasisabi entirely and keep the machine.
+# remove wabisabi entirely and keep the machine.
 
 {
   imports = [
@@ -46,39 +46,39 @@
   # must stay compatible with. Leave it alone.
   system.stateVersion = "CHANGEME_STATE_VERSION";
 
-  # ── wasisabi system layer ──
-  wasisabi.enable = true;
+  # ── wabisabi system layer ──
+  wabisabi.enable = true;
 
   # Who the machine belongs to: the account the agent layer (pi, wherever,
   # the local model and search) is set up for.
-  wasisabi.user = "CHANGEME_USERNAME";
+  wabisabi.user = "CHANGEME_USERNAME";
 
   # Encrypted secrets (sops), including your password's hash, readable only
   # with this machine's age key, which is never in this repo. Set up by
-  # `wasisabi-secrets init` (the installer runs it for you), which uncomments
-  # the line below. `wasisabi-secrets --help` for the rest.
-  # wasisabi.secrets.sopsFile = ./secrets/secrets.yaml;
+  # `wabisabi-secrets init` (the installer runs it for you), which uncomments
+  # the line below. `wabisabi-secrets --help` for the rest.
+  # wabisabi.secrets.sopsFile = ./secrets/secrets.yaml;
 
-  # Ordinary Nix, and yours. Every value wasisabi sets is a mkDefault, so each
+  # Ordinary Nix, and yours. Every value wabisabi sets is a mkDefault, so each
   # line below simply wins; delete one and that option falls back to the
   # project default. All of them are documented in modules/options.nix, and
-  # readable on the running machine with `nixos-option wasisabi`.
-  # >>> wasisabi:system
-  # wasisabi.greetd.greeter = "tuigreet";
-  # wasisabi.tor.enable = false;
-  # wasisabi.keyboard.layout = "fr";
-  # <<< wasisabi:system
+  # readable on the running machine with `nixos-option wabisabi`.
+  # >>> wabisabi:system
+  # wabisabi.greetd.greeter = "tuigreet";
+  # wabisabi.tor.enable = false;
+  # wabisabi.keyboard.layout = "fr";
+  # <<< wabisabi:system
 
-  # ── wasisabi home layer, for your user ──
+  # ── wabisabi home layer, for your user ──
   home-manager.users.CHANGEME_USERNAME = {
-    imports = [ wasisabi.homeModules.wasisabi ];
-    wasisabi.enable = true;
+    imports = [ wabisabi.homeModules.wabisabi ];
+    wabisabi.enable = true;
 
     # Overriding the opinionated defaults is the whole point:
-    # >>> wasisabi:home
-    # wasisabi.browser = "librewolf";
-    # wasisabi.editor = "helix";
-    # wasisabi.apps.office = true;
-    # <<< wasisabi:home
+    # >>> wabisabi:home
+    # wabisabi.browser = "librewolf";
+    # wabisabi.editor = "helix";
+    # wabisabi.apps.office = true;
+    # <<< wabisabi:home
   };
 }

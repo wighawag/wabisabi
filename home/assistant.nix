@@ -11,7 +11,7 @@
 #   - a welcome notification on the first graphical login, shown once and
 #     only after Noctalia's own intro is closed (after-noctalia-intro, noctalia.nix)
 #
-# All four run the same command, `wasisabi-assistant`, which asks
+# All four run the same command, `wabisabi-assistant`, which asks
 # `wherever-link` for the URL AT CLICK TIME. That is the one design constraint:
 # the URL carries the access token (in the fragment, which a browser never
 # sends), the token is minted on the machine at first start and readable only
@@ -29,7 +29,7 @@
 # own, and webhands' Chromium, which agents point at arbitrary pages. On a mesh
 # box, those browsers are not on the same host as the server; here they are.
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
 
   # On by default exactly when this home belongs to the account the system
   # layer runs wherever for. Standalone home-manager (no NixOS underneath) has
@@ -45,7 +45,7 @@ let
   keyName = { SUPER = "Super"; ALT = "Alt"; CTRL = "Ctrl"; }.${cfg.modKey};
 
   # One path, used by the script and by the unit's condition.
-  stampRel = ".local/state/wasisabi/assistant-welcomed";
+  stampRel = ".local/state/wabisabi/assistant-welcomed";
 
   browserCmd =
     if cfg.browser == "firefox" then lib.getExe pkgs.firefox
@@ -54,7 +54,7 @@ let
     else "${pkgs.xdg-utils}/bin/xdg-open";
 
   open = pkgs.writeShellApplication {
-    name = "wasisabi-assistant";
+    name = "wabisabi-assistant";
     runtimeInputs = [ pkgs.libnotify pkgs.coreutils pkgs.curl ];
     text = ''
       # wherever-link comes from the system profile, which a session spawned
@@ -76,7 +76,7 @@ let
       done
 
       if [ -z "$url" ]; then
-        notify-send --app-name=wasisabi "Assistant unavailable" \
+        notify-send --app-name=wabisabi "Assistant unavailable" \
           "wherever is not running. Check it with: systemctl status wherever"
         exit 1
       fi
@@ -86,7 +86,7 @@ let
   };
 
   welcome = pkgs.writeShellApplication {
-    name = "wasisabi-assistant-welcome";
+    name = "wabisabi-assistant-welcome";
     runtimeInputs = [ pkgs.libnotify pkgs.coreutils pkgs.gnugrep pkgs.systemd pkgs.niri ];
     text = ''
       stamp="$HOME/${stampRel}"
@@ -123,7 +123,7 @@ let
       # clicked, while Noctalia shows only NAMED actions, as buttons, and a
       # click on its body fires nothing. The body is short because Noctalia
       # cuts a toast at three lines.
-      action=$(notify-send --app-name=wasisabi --expire-time=0 --wait \
+      action=$(notify-send --app-name=wabisabi --expire-time=0 --wait \
         --action=default="Open" \
         --action=open="Open the assistant" \
         "Your assistant is ready" \
@@ -143,7 +143,7 @@ let
   };
 in
 {
-  options.wasisabi.assistant = {
+  options.wabisabi.assistant = {
     enable = lib.mkOption {
       type = lib.types.bool;
       default = ownsWherever;
@@ -173,7 +173,7 @@ in
 
       # The launcher entry. Both fuzzel and Noctalia's launcher list XDG
       # desktop entries, so this one definition serves both shells.
-      xdg.desktopEntries.wasisabi-assistant = {
+      xdg.desktopEntries.wabisabi-assistant = {
         name = "Assistant";
         genericName = "Local AI assistant";
         comment = "The AI assistant running on this computer (wherever, on the local model)";
@@ -205,7 +205,7 @@ in
     })
 
     (lib.mkIf cfg.assistant.welcome {
-      systemd.user.services.wasisabi-assistant-welcome = {
+      systemd.user.services.wabisabi-assistant-welcome = {
         Unit = {
           Description = "Introduce the local assistant, once";
           After = [ config.wayland.systemd.target ];

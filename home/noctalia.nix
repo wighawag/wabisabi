@@ -25,7 +25,7 @@
 # store symlink, which makes `git config --global` fail forever.
 
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
 
   # One patch to the shell's text: its first-run window greets the machine,
   # not the shell ("Welcome", not "Welcome to Noctalia"). English only; other
@@ -61,7 +61,7 @@ let
     tooltip = "Assistant"
 
     [widget.assistant.actions]
-    left = "exec wasisabi-assistant"
+    left = "exec wabisabi-assistant"
   '';
 
   # `after-noctalia-intro CMD...`: run CMD once Noctalia's own first-login
@@ -88,13 +88,13 @@ let
       '';
   };
 
-  # The palette (theme/palettes.nix via `wasisabi.theme`). Catppuccin is one
+  # The palette (theme/palettes.nix via `wabisabi.theme`). Catppuccin is one
   # of Noctalia's builtin palettes; sumi is shipped as a custom palette file
   # in Noctalia's own format, from the same role mapping the greeter uses
   # (theme/noctalia.nix), so the login screen and the shell match.
   c = (import ../theme/palettes.nix).${cfg.theme};
   sumi = cfg.theme == "sumi";
-  paletteName = "wasisabi-sumi";
+  paletteName = "wabisabi-sumi";
   roles = import ../theme/noctalia.nix c;
   # primary -> mPrimary, on_surface_variant -> mOnSurfaceVariant
   mName = role: "m" + lib.concatMapStrings
@@ -122,10 +122,10 @@ let
   # when the image does: this file is seeded once, so a store path in it would
   # dangle after the next garbage collection.
   wallpaperExt = let m = builtins.match ".*(\\.[A-Za-z0-9]+)" (toString cfg.wallpaper); in if m == null then "" else lib.head m;
-  wallpaperPath = "${config.xdg.dataHome}/wasisabi/wallpaper${wallpaperExt}";
+  wallpaperPath = "${config.xdg.dataHome}/wabisabi/wallpaper${wallpaperExt}";
 
   seed = pkgs.writeText "noctalia-config.toml" (''
-    # Seeded ONCE by wasisabi on first login, then yours. Edit freely, in this
+    # Seeded ONCE by wabisabi on first login, then yours. Edit freely, in this
     # file or in Noctalia's settings GUI; nothing rewrites it.
     [shell]
     font_family = "JetBrainsMono Nerd Font"
@@ -150,7 +150,7 @@ let
   '' + assistantBar);
 in
 {
-  options.wasisabi.afterNoctaliaIntro = lib.mkOption {
+  options.wabisabi.afterNoctaliaIntro = lib.mkOption {
     type = lib.types.package;
     readOnly = true;
     internal = true;

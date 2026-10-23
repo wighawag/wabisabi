@@ -1,5 +1,5 @@
 {
-  description = "My machine on wasisabi";
+  description = "My machine on wabisabi";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -7,9 +7,9 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    wasisabi = {
-      url = "github:wighawag/wasisabi";
-      # Point wasisabi at YOUR pins rather than its own. The module layers are
+    wabisabi = {
+      url = "github:wighawag/wabisabi";
+      # Point wabisabi at YOUR pins rather than its own. The module layers are
       # plain modules -- `pkgs` comes from the nixosSystem that imports them --
       # so this is what makes them evaluate against the nixpkgs above.
       inputs.nixpkgs.follows = "nixpkgs";
@@ -22,15 +22,15 @@
     };
   };
 
-  outputs = { nixpkgs, home-manager, wasisabi, nixos-hardware, ... }: {
+  outputs = { nixpkgs, home-manager, wabisabi, nixos-hardware, ... }: {
     nixosConfigurations.CHANGEME_HOSTNAME = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
-      specialArgs = { inherit wasisabi; };
+      specialArgs = { inherit wabisabi; };
       modules = [
-        # ── The wasisabi system layer: services, programs, sane defaults ──
+        # ── The wabisabi system layer: services, programs, sane defaults ──
         # Everything it sets is mkDefault, so anything you write in
-        # configuration.nix wins. Inert until `wasisabi.enable = true` there.
-        wasisabi.nixosModules.wasisabi
+        # configuration.nix wins. Inert until `wabisabi.enable = true` there.
+        wabisabi.nixosModules.wabisabi
 
         ./configuration.nix
         home-manager.nixosModules.home-manager

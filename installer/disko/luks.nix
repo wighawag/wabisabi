@@ -9,7 +9,7 @@
 # to you.
 #
 # The passphrase is typed on the keyboard layout chosen during installation,
-# because wasisabi.keyboard.layout feeds console.useXkbConfig and so reaches
+# because wabisabi.keyboard.layout feeds console.useXkbConfig and so reaches
 # the initrd. That is the single most important reason the layout is an option
 # rather than something set after first boot.
 #
@@ -19,7 +19,7 @@
 
 {
   device ? throw "pass the target disk: disko --argstr device /dev/sdX",
-  passphraseFile ? "/tmp/wasisabi-luks.key",
+  passphraseFile ? "/tmp/wabisabi-luks.key",
   ...
 }:
 

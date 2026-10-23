@@ -10,21 +10,21 @@
 # greeter.
 
 let
-  cfg = config.wasisabi;
+  cfg = config.wabisabi;
 
-  artwork = pkgs.callPackage ../pkgs/wasisabi-artwork/package.nix { };
+  artwork = pkgs.callPackage ../pkgs/wabisabi-artwork/package.nix { };
 
   plymouth = "${config.boot.plymouth.package}/bin/plymouth";
   handover = cfg.greetd.enable && cfg.greetd.greeter == "noctalia";
 
-  # The splash follows the palette. wasisabi's own theme paints an enso as
-  # the machine boots (pkgs/wasisabi-artwork, artwork/README.md);
+  # The splash follows the palette. wabisabi's own theme paints an enso as
+  # the machine boots (pkgs/wabisabi-artwork, artwork/README.md);
   # catppuccin-plymouth defaults to the macchiato flavour, and the rest of the
   # Catppuccin theme is Mocha.
   splash = {
     sumi = {
       package = artwork;
-      name = "wasisabi";
+      name = "wabisabi";
     };
     catppuccin-mocha = {
       package = pkgs.catppuccin-plymouth.override { variant = "mocha"; };
@@ -56,7 +56,7 @@ lib.mkIf (cfg.enable && cfg.splash.enable) {
   # Note what `quiet` does NOT hide: systemd password prompts (disk unlock),
   # the emergency shell, and fsck errors that need an answer. A boot that
   # actually fails is still visible and still interactive. Set
-  # `wasisabi.splash.enable = false` if you would rather watch every unit.
+  # `wabisabi.splash.enable = false` if you would rather watch every unit.
   #
   # kernelParams is an additive list, so these are appended rather than
   # mkDefault'd: a user adding their own params keeps these too.
@@ -90,7 +90,7 @@ lib.mkIf (cfg.enable && cfg.splash.enable) {
   # a lingering splash would cover.
   systemd.services.plymouth-quit.serviceConfig.ExecStart = lib.mkIf handover [ "" "-${plymouth} deactivate" ];
   systemd.services.plymouth-quit-wait.serviceConfig.ExecStart = lib.mkIf handover [ "" "-${plymouth} deactivate" ];
-  systemd.services.wasisabi-splash-handover = lib.mkIf handover {
+  systemd.services.wabisabi-splash-handover = lib.mkIf handover {
     description = "Hand the boot splash over to the greeter";
     after = [ "greetd.service" ];
     wantedBy = [ "greetd.service" ];

@@ -7,7 +7,7 @@
 # boots, comes up healthy, and is the machine its own flake describes. So this
 # runs in four stages, each of which can fail on its own:
 #
-#   1. install   boot the autotest ISO, which runs wasisabi-install unattended
+#   1. install   boot the autotest ISO, which runs wabisabi-install unattended
 #                against a blank disk and powers off. Watches the serial log
 #                for the success sentinel.
 #   2. boot      boot the installed disk with a real GPU (virtio-vga-gl under
@@ -152,11 +152,11 @@ if want_stage 1; then
   set -e
   [ $rc -eq 0 ] || echo "  (qemu exited $rc)"
 
-  if grep -q "WASISABI_INSTALL_OK" "$SERIAL"; then
-    ok "installer reported success: $(grep -o 'WASISABI_INSTALL_OK.*' "$SERIAL" | head -1)"
+  if grep -q "WABISABI_INSTALL_OK" "$SERIAL"; then
+    ok "installer reported success: $(grep -o 'WABISABI_INSTALL_OK.*' "$SERIAL" | head -1)"
 
     if [ "$VARIANT" = restore-fleet ]; then
-      if grep -q "WASISABI_INSTALL_OK host=laptop user=tester layout=disko .*mode=restore" "$SERIAL"; then
+      if grep -q "WABISABI_INSTALL_OK host=laptop user=tester layout=disko .*mode=restore" "$SERIAL"; then
         ok "restored the fleet's laptop, partitioned by its own disko declaration"
       else
         bad "the fleet restore did not report host=laptop with layout=disko"
@@ -182,7 +182,7 @@ if want_stage 1; then
       # The restore answers name only the source, the key and the disk. The
       # hostname and user are the fixture repo's, so seeing them here means
       # they were read out of the repo.
-      if grep -q "WASISABI_INSTALL_OK host=restored user=mira .*mode=restore" "$SERIAL"; then
+      if grep -q "WABISABI_INSTALL_OK host=restored user=mira .*mode=restore" "$SERIAL"; then
         ok "restored the repo's machine (host and user read from the repo)"
       else
         bad "the restore did not produce the repo's host and user"
@@ -194,7 +194,7 @@ if want_stage 1; then
       fi
     # The answers file says nothing about secrets, so this also checks that
     # an unanswered secrets question takes the recommended default.
-    elif grep -q "WASISABI_INSTALL_OK.*secrets=generate" "$SERIAL"; then
+    elif grep -q "WABISABI_INSTALL_OK.*secrets=generate" "$SERIAL"; then
       ok "secrets were set up with a generated key (the default)"
     else
       bad "secrets were not set up by default"
@@ -271,7 +271,7 @@ if want_stage 2; then
       # key that yields 'a' is the one called 'q'.
       #
       # If this unlocks, the initrd really is using the layout that was chosen
-      # during installation. If wasisabi ever stops carrying the layout that
+      # during installation. If wabisabi ever stops carrying the layout that
       # far, this hangs at the passphrase prompt instead of quietly passing,
       # which is the failure everyone else discovers on real hardware.
       for ch in t e s t p q s s p h r q s e; do

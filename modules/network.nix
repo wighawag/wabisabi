@@ -4,7 +4,7 @@
 # both are harmless when the hardware is absent, which keeps this layer
 # hardware-agnostic.
 
-let cfg = config.wasisabi; in
+let cfg = config.wabisabi; in
 lib.mkIf cfg.enable {
   networking.networkmanager.enable = lib.mkDefault true;
   networking.firewall.enable = lib.mkDefault true;

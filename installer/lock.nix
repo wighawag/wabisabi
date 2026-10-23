@@ -11,7 +11,7 @@
 # is a decision its owner makes rather than a side effect of first boot.
 #
 # It is derived from this repo's own flake.lock by promoting the root node to
-# a `wasisabi` node and giving the user's flake a new root over the same input
+# a `wabisabi` node and giving the user's flake a new root over the same input
 # nodes. Same revisions, same narHashes, so the store paths the medium carries
 # are exactly the ones the target flake asks for. (A GitHub tarball and a
 # clean local checkout of the same revision produce an identical narHash and
@@ -20,11 +20,11 @@
 # TWO MODES, and the difference is visible in the installed flake rather than
 # hidden:
 #
-#   committed tree -> wasisabi is pinned as github:wighawag/wasisabi at that
+#   committed tree -> wabisabi is pinned as github:wighawag/wabisabi at that
 #                     revision. The normal case, and an ordinary flake that
 #                     `nix flake update` can move forward.
 #
-#   dirty tree     -> wasisabi is pinned as a path: into the medium's own
+#   dirty tree     -> wabisabi is pinned as a path: into the medium's own
 #                     store. The installed machine is then self-contained and
 #                     reproduces the exact tree the ISO was built from,
 #                     including uncommitted edits, which is what you want when
@@ -46,7 +46,7 @@ let
   rev = self.rev or null;
   dirty = rev == null;
 
-  url = if dirty then "path:${self}" else "github:wighawag/wasisabi";
+  url = if dirty then "path:${self}" else "github:wighawag/wabisabi";
 
   lockedNode =
     if dirty then
@@ -59,7 +59,7 @@ let
       {
         type = "github";
         owner = "wighawag";
-        repo = "wasisabi";
+        repo = "wabisabi";
         inherit rev;
         narHash = self.narHash;
         lastModified = self.lastModified or 1;
@@ -75,11 +75,11 @@ let
       {
         type = "github";
         owner = "wighawag";
-        repo = "wasisabi";
+        repo = "wabisabi";
       };
 in
 
-runCommand "wasisabi-target-lock"
+runCommand "wabisabi-target-lock"
   {
     nativeBuildInputs = [ jq ];
     ourLock = ../flake.lock;
@@ -104,7 +104,7 @@ runCommand "wasisabi-target-lock"
     # and on offline media fails always. Catch it at build time instead.
     declared=$(sed -n '/^  inputs = {/,/^  };/p' "$templateFlake" \
       | grep -oE '^    [a-zA-Z0-9_-]+' | tr -d ' ' | sort -u | tr '\n' ' ')
-    expected="home-manager nixos-hardware nixpkgs wasisabi "
+    expected="home-manager nixos-hardware nixpkgs wabisabi "
     if [ "$declared" != "$expected" ]; then
       echo "lock.nix: template/flake.nix declares inputs [$declared]" >&2
       echo "          but this file writes a lock for      [$expected]" >&2
@@ -115,7 +115,7 @@ runCommand "wasisabi-target-lock"
 
     for follow in nixpkgs home-manager nixos-hardware; do
       grep -q "inputs.$follow.follows = \"$follow\";" "$templateFlake" || {
-        echo "lock.nix: template/flake.nix no longer makes wasisabi follow '$follow'." >&2
+        echo "lock.nix: template/flake.nix no longer makes wabisabi follow '$follow'." >&2
         echo "          The lock written here says it does, which makes it stale." >&2
         exit 1
       }
@@ -135,12 +135,12 @@ runCommand "wasisabi-target-lock"
         .nodes.root as $ourRoot
         | $ourRoot.inputs as $ours
 
-        # The template collapses wasisabi'"'"'s nixpkgs, home-manager and
+        # The template collapses wabisabi'"'"'s nixpkgs, home-manager and
         # nixos-hardware onto its own with `follows`. The lock has to say the
         # same thing, or nix calls it stale and re-resolves -- which on an
         # offline install is a failed install, and on a networked one silently
         # installs something other than what was tested.
-        | .nodes.wasisabi = {
+        | .nodes.wabisabi = {
             inputs: ($ours | with_entries(
               if (.key == "nixpkgs" or .key == "home-manager" or .key == "nixos-hardware")
               then .value = [.key]
@@ -155,7 +155,7 @@ runCommand "wasisabi-target-lock"
               nixpkgs: $ours.nixpkgs,
               "home-manager": $ours["home-manager"],
               "nixos-hardware": $ours["nixos-hardware"],
-              wasisabi: "wasisabi"
+              wabisabi: "wabisabi"
             }
           }
       ' "$ourLock" > $out/flake.lock
@@ -166,6 +166,6 @@ runCommand "wasisabi-target-lock"
       $out/flake.lock > /dev/null \
       || { echo "lock.nix: produced a lock with a dangling root input" >&2; exit 1; }
 
-    jq -e '.version == 7 and .nodes.wasisabi.locked.narHash != null' $out/flake.lock > /dev/null \
-      || { echo "lock.nix: produced a lock without a pinned wasisabi" >&2; exit 1; }
+    jq -e '.version == 7 and .nodes.wabisabi.locked.narHash != null' $out/flake.lock > /dev/null \
+      || { echo "lock.nix: produced a lock without a pinned wabisabi" >&2; exit 1; }
   ''

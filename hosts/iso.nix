@@ -3,7 +3,7 @@
 # Variants:
 #   netinstall  small (~1.5G), TEXT ONLY. Evaluates from the sources on the
 #               medium, fetches packages from cache.nixos.org. Needs a network.
-#   offline     large (~9G), and LIVE: it boots into the wasisabi desktop so it
+#   offline     large (~9G), and LIVE: it boots into the wabisabi desktop so it
 #               can be tried before installing, and it carries the package
 #               closures too, so a machine with no network at all still gets
 #               the same system. Its boot menu also has a text-only entry that
@@ -17,7 +17,7 @@
 # first and, without one, lands in a text shell that says why and how to
 # install, instead of starting the compositor. See `liveSession` below.
 #
-# Both carry the wasisabi source and the pinned lock, so the ISO installs the
+# Both carry the wabisabi source and the pinned lock, so the ISO installs the
 # exact revision it was built from rather than whatever is on the internet
 # today.
 
@@ -28,17 +28,17 @@
   modulesPath,
   installer,
   nixpkgsSource,
-  # Every flake source the generated config refers to, wasisabi's own
+  # Every flake source the generated config refers to, wabisabi's own
   # included. Without these the medium carries a lock that names store paths
   # it does not have, and the install dies at the last step asking to change
   # the lock file -- which is exactly what a pinned install must not do.
   sources,
-  wasisabiRev,
+  wabisabiRev,
   offline ? false,
-  # The live desktop (the offline medium). Needs the wasisabi modules, which
-  # the flake passes in as `wasisabiModules`.
+  # The live desktop (the offline medium). Needs the wabisabi modules, which
+  # the flake passes in as `wabisabiModules`.
   live ? false,
-  wasisabiModules ? null,
+  wabisabiModules ? null,
   payloads ? [ ],
   # Unattended install, for the end-to-end VM test. Never set on media meant
   # for a person: it partitions the disk named in the answers file without
@@ -52,8 +52,8 @@
     (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix")
   ]
   ++ lib.optionals live [
-    wasisabiModules.system
-    wasisabiModules.homeManager
+    wabisabiModules.system
+    wabisabiModules.homeManager
     ./live.nix
   ];
 
@@ -62,10 +62,10 @@
   # comes from somewhere else entirely.
   # The autotest image must be impossible to mistake for real media, by name
   # and by volume label. It installs unattended with no confirmation, so a
-  # file called wasisabi-netinstall.iso that silently partitions whatever the
+  # file called wabisabi-netinstall.iso that silently partitions whatever the
   # baked answers name is a grenade sitting in a downloads directory.
   image.baseName = lib.mkForce (
-    "wasisabi-${if offline then "offline" else "netinstall"}"
+    "wabisabi-${if offline then "offline" else "netinstall"}"
     + lib.optionalString (autotest != null) "-AUTOTEST-DESTROYS-DISKS"
   );
 
@@ -74,11 +74,11 @@
     # wallpaper, darkened on the left, and the menu set in the dark half.
     # (Legacy BIOS boots keep syslinux's plain menu: the installer needs UEFI
     # anyway.)
-    grubTheme = pkgs.callPackage ../pkgs/wasisabi-grub-theme/package.nix {
-      wasisabi-artwork = pkgs.callPackage ../pkgs/wasisabi-artwork/package.nix { };
+    grubTheme = pkgs.callPackage ../pkgs/wabisabi-grub-theme/package.nix {
+      wabisabi-artwork = pkgs.callPackage ../pkgs/wabisabi-artwork/package.nix { };
     };
 
-    volumeID = lib.mkForce (if autotest != null then "WASISABI_TEST" else "WASISABI");
+    volumeID = lib.mkForce (if autotest != null then "WABISABI_TEST" else "WABISABI");
     # The offline image is mostly nix store, which is exactly what zstd is
     # good at; the default is already zstd but at a level tuned for a small
     # image, and this one is not small either way.
@@ -89,7 +89,7 @@
     storeContents = payloads;
   };
 
-  # The installer needs to EVALUATE wasisabi on the target, not just copy
+  # The installer needs to EVALUATE wabisabi on the target, not just copy
   # store paths, so the flake sources ride along in both variants.
   system.extraDependencies =
     sources
@@ -215,21 +215,21 @@
 
   services.getty.helpLine = lib.mkForce ''
 
-        wasisabi installer
+        wabisabi installer
 
-        Run:  sudo wasisabi-install
+        Run:  sudo wabisabi-install
         Wifi: sudo nmtui
-        Docs: https://github.com/wighawag/wasisabi
+        Docs: https://github.com/wighawag/wabisabi
 
-        This medium installs wasisabi ${lib.substring 0 12 wasisabiRev}${lib.optionalString offline ", with no network required"}.
+        This medium installs wabisabi ${lib.substring 0 12 wabisabiRev}${lib.optionalString offline ", with no network required"}.
   '';
 
   # Never silently unfree, even on the installer.
   nixpkgs.config.allowUnfree = false;
 
   # ── the unattended path, used only by scripts/test-install-vm.sh ──
-  systemd.services.wasisabi-autotest = lib.mkIf (autotest != null) {
-    description = "Unattended wasisabi install (VM test)";
+  systemd.services.wabisabi-autotest = lib.mkIf (autotest != null) {
+    description = "Unattended wabisabi install (VM test)";
     wantedBy = [ "multi-user.target" ];
     after = [
       "network-online.target"
@@ -246,17 +246,17 @@
       # physical machines simply does not exist -- but "it probably will not
       # match" is luck, not a control, and this runs before any prompt.
       if ! ${lib.getExe' pkgs.systemd "systemd-detect-virt"} --quiet; then
-        echo "WASISABI_AUTOTEST_REFUSED: not running in a VM"
+        echo "WABISABI_AUTOTEST_REFUSED: not running in a VM"
         exit 0
       fi
 
-      echo "WASISABI_AUTOTEST_START"
+      echo "WABISABI_AUTOTEST_START"
       rc=0
-      ${lib.getExe' installer "wasisabi-install"} --answers ${autotest} --yes --no-reboot || rc=$?
+      ${lib.getExe' installer "wabisabi-install"} --answers ${autotest} --yes --no-reboot || rc=$?
       if [ $rc -eq 0 ]; then
-        echo "WASISABI_AUTOTEST_DONE"
+        echo "WABISABI_AUTOTEST_DONE"
       else
-        echo "WASISABI_AUTOTEST_FAILED rc=$rc"
+        echo "WABISABI_AUTOTEST_FAILED rc=$rc"
         # Without this, a failure is a VM that powered off nine seconds in and
         # told you nothing at all.
         echo "=== journal ==='"

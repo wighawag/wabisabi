@@ -1,6 +1,6 @@
 { lib, config, pkgs, ... }:
 
-let cfg = config.wasisabi; in
+let cfg = config.wabisabi; in
 {
   imports = [ ./options.nix ./core.nix ./boot.nix ./desktop.nix ./network.nix ./agents.nix ./secrets.nix ];
 
@@ -9,9 +9,9 @@ let cfg = config.wasisabi; in
     assertions = lib.optional cfg.enforceLibre {
       assertion = !(config.nixpkgs.config.allowUnfree or false);
       message = ''
-        wasisabi: nixpkgs.config.allowUnfree = true, which violates the
+        wabisabi: nixpkgs.config.allowUnfree = true, which violates the
         libre-only rule of this setup. Either keep allowUnfree = false, or
-        explicitly opt out by setting wasisabi.enforceLibre = false.
+        explicitly opt out by setting wabisabi.enforceLibre = false.
       '';
     };
   };

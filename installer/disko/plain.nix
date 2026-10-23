@@ -1,5 +1,5 @@
 # Whole-disk layout: GPT, an EFI system partition, ext4 root. No swap
-# partition, because wasisabi.zram.enable is on by default and compressed RAM
+# partition, because wabisabi.zram.enable is on by default and compressed RAM
 # swap needs no disk layout. Hibernation does need a real swap area, and that
 # is the reason the installer also offers the manual path.
 #

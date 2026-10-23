@@ -9,5 +9,5 @@ root=$(cd .. && pwd)
 nixpkgs=$(nix eval --raw --impure --expr "(builtins.getFlake \"$root\").inputs.nixpkgs.outPath")
 fraunces=$(nix build --no-link --print-out-paths "path:$nixpkgs#legacyPackages.x86_64-linux.fraunces")
 
-export WASISABI_FONT_SERIF="$fraunces/share/fonts/truetype/Fraunces72ptSoft-Light.ttf"
+export WABISABI_FONT_SERIF="$fraunces/share/fonts/truetype/Fraunces72ptSoft-Light.ttf"
 exec node generate.mjs

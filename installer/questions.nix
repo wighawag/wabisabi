@@ -1,6 +1,6 @@
 # The installer's question list, GENERATED FROM THE OPTION DECLARATIONS.
 #
-# For every wasisabi option the plan says to ask about, the prompt, the type,
+# For every wabisabi option the plan says to ask about, the prompt, the type,
 # the allowed values and the default are read out of modules/options.nix and
 # home/options.nix rather than restated here. Adding an enum value, changing a
 # default or rewording a description therefore changes the installer, with no
@@ -10,14 +10,14 @@
 # either asked or skipped-with-a-reason, and anything else is a build error.
 #
 # Output is plain data (a list of groups of items), serialised to JSON for the
-# installer script, so the TUI is a renderer with no knowledge of wasisabi.
+# installer script, so the TUI is a renderer with no knowledge of wabisabi.
 
 { lib }:
 
 let
   plan = import ./plan.nix;
 
-  optionsOf = path: (lib.evalModules { modules = [ path ]; }).options.wasisabi;
+  optionsOf = path: (lib.evalModules { modules = [ path ]; }).options.wabisabi;
 
   layers = {
     system = optionsOf ../modules/options.nix;
@@ -77,7 +77,7 @@ let
     else if n == "str" || n == "string" then
       "text"
     else
-      throw "wasisabi installer: option type '${n}' has no question kind. Teach installer/questions.nix how to ask it.";
+      throw "wabisabi installer: option type '${n}' has no question kind. Teach installer/questions.nix how to ask it.";
 
   # An item is either a reference to a declared option, or one of the
   # installer's own questions (identity, disks), which have no declaration.
@@ -88,20 +88,20 @@ let
         key = item.option;
         opt =
           declared.${key}
-            or (throw "wasisabi installer: plan.nix asks about '${key}', which is not a declared option.");
+            or (throw "wabisabi installer: plan.nix asks about '${key}', which is not a declared option.");
         path = lib.elemAt (lib.splitString ":" key) 1;
         layer = lib.head (lib.splitString ":" key);
       in
       {
         inherit key;
         kind = kindOf opt;
-        prompt = "wasisabi.${path}";
+        prompt = "wabisabi.${path}";
         help = firstParagraph (opt.description or "");
         helpFull = opt.description or "";
         default = renderDefault opt;
         values = opt.type.functor.payload.values or [ ];
         emit = {
-          attr = "wasisabi.${path}";
+          attr = "wabisabi.${path}";
           block = layer;
         };
       }
@@ -129,7 +129,7 @@ in
 # the failing expression, and a rule whose whole value is telling you what to
 # do about it should say so.
 lib.throwIf (unclassified != [ ]) ''
-  wasisabi installer: these options are declared but the installer neither asks about them nor skips them:
+  wabisabi installer: these options are declared but the installer neither asks about them nor skips them:
     ${lib.concatStringsSep "\n    " unclassified}
   Add each to a group in installer/plan.nix, or to `skip` with the reason it is not worth asking.
 ''
@@ -137,14 +137,14 @@ lib.throwIf (unclassified != [ ]) ''
   lib.throwIf
   (phantom != [ ])
   ''
-    wasisabi installer: installer/plan.nix skips options that do not exist:
+    wabisabi installer: installer/plan.nix skips options that do not exist:
       ${lib.concatStringsSep "\n    " phantom}
   ''
 
   lib.throwIf
   (duplicated != [ ])
   ''
-    wasisabi installer: these options are asked about more than once:
+    wabisabi installer: these options are asked about more than once:
       ${lib.concatStringsSep "\n    " (lib.unique duplicated)}
   ''
 
