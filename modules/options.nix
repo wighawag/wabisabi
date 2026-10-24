@@ -479,6 +479,7 @@
         Only its code recipes (*.mjs, *.js) are loaded; declarative *.json
         recipes in it are not.
 
+        Give its engine order in `search.engines` too (required with a set).
         To use a set from a flake input or a local path instead of a URL, set
         `search.recipeSet`.
       '';
@@ -506,19 +507,18 @@
         "mwmbl"
       ];
       description = ''
-        The searchcast engine chain: recipe names, tried in order until one answers. Leave empty for the recipe set's code recipes in file-name order, then webveil's bundled Mwmbl and Marginalia as fallbacks.
+        The searchcast engine chain: recipe names (usually the file names without .mjs), tried in order until one answers. REQUIRED with a recipe set; add "mwmbl" and "marginalia" for webveil's bundled engines as fallbacks.
 
-        An engine's name is its recipe's `name`, usually its file name without
-        .mjs: the empty default assumes exactly that, so set this list when a
-        set names its recipes differently or holds helper modules that are not
-        engines. "mwmbl" and "marginalia" name webveil's bundled recipes and
-        bring their files along (so a set must not contain recipes of those
-        names if they are listed here). With no recipe set, an empty list
-        means webveil's own default chain.
+        searchcast stops at the first engine that answers, and "no results"
+        is an answer, so put first the engines you trust to answer well (over
+        Tor too, for the anon accounts) and the ones that sometimes answer
+        empty after them. That judgement belongs to whoever chose the set,
+        which is why there is no default order.
 
-        Reading the file names of the set happens while the configuration is
-        evaluated (an import from a derivation, so the set is fetched then);
-        a non-empty list avoids that.
+        An engine's name is its recipe's `name`. "mwmbl" and "marginalia" name
+        webveil's bundled recipes and bring their files along (so a set must
+        not contain recipes of those names if they are listed here). With no
+        recipe set, leave it empty for webveil's own default chain.
       '';
     };
 

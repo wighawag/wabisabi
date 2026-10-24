@@ -248,6 +248,9 @@
         }
         {
           option = "system:search.engines";
+          # Required once a set is given: the config refuses a set without a
+          # chain, so an empty answer here would be an install that fails.
+          required = true;
           onlyIf = {
             key = "system:search.recipes.url";
             notEquals = "";

@@ -131,7 +131,11 @@ let
         path = lib.elemAt (lib.splitString ":" key) 1;
         layer = lib.head (lib.splitString ":" key);
         onlyIf = conditions (item.onlyIf or null);
-        withCondition = extra: q: q // lib.optionalAttrs (onlyIf ++ extra != [ ]) { onlyIf = onlyIf ++ extra; };
+        withCondition =
+          extra: q:
+          q
+          // lib.optionalAttrs (onlyIf ++ extra != [ ]) { onlyIf = onlyIf ++ extra; }
+          // lib.optionalAttrs (item.required or false) { required = true; };
       in
       if item ? fields then
         let

@@ -68,11 +68,11 @@
         "wherever": "wherever"
       },
       "locked": {
-        "lastModified": 1792823801,
-        "narHash": "sha256-QD3P/yxA01SRODpXlsP+SI7skU4/5igsfv7f6UBjywc=",
+        "lastModified": 1792844371,
+        "narHash": "sha256-Jn5PbjGPtq5FWd3hdwsOgMoJK/jKmSV8G/IGyh+2iqQ=",
         "owner": "wighawag",
         "repo": "nixos-modules",
-        "rev": "5a2cc33333fc3e461f7ee7e21cf8073bb52b6a5d",
+        "rev": "57c14a355ad3989800e99e4a2e893c7918215145",
         "type": "github"
       },
       "original": {

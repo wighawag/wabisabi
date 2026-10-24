@@ -106,37 +106,22 @@ let
     "marginalia"
   ];
 
-  # The chain when none is given: the set's code recipes in the order webveil
-  # loads a directory (sorted file names), named by file name, then the
-  # bundled engines as fallbacks unless the set has its own of that name.
-  # Reading the directory is an import from a derivation, which is why an
-  # explicit `search.engines` skips it.
-  setEngines =
-    let
-      files = lib.attrNames (
-        lib.filterAttrs (n: t: t != "directory" && builtins.match ".*\\.m?js" n != null) (
-          builtins.readDir recipeSet
-        )
-      );
-    in
-    map (f: lib.removeSuffix ".js" (lib.removeSuffix ".mjs" f)) files;
+  # The chain is the owner's, verbatim. With a recipe set it is REQUIRED (an
+  # assertion below): searchcast stops at the first engine that ANSWERS, and
+  # an engine that answers "no results" counts, so the order is a judgement
+  # about the engines, which only whoever chose the set can make. A default
+  # read off the set's file names was tried first and failed in a VM test on
+  # 2026-10-24: over Tor, the alphabetically first engine of a real set
+  # answered empty, so every anon search returned nothing while another engine
+  # of the same set had 9 relevant results.
+  engines = cfg.search.engines;
 
-  engines =
-    if cfg.search.engines != [ ] then
-      cfg.search.engines
-    else if recipeSet == null then
-      [ ]
-    else
-      setEngines ++ lib.filter (e: !lib.elem e setEngines) bundledOrder;
-
-  # Empty with no recipe set and no chain: webveil's own default chain.
+  # The set as ONE directory (webveil loads every *.js/*.mjs in it), plus the
+  # bundled recipes the chain names. With neither, the list is empty and
+  # nixos-modules leaves the key out: webveil's own default chain.
   codeRecipes =
     lib.optional (recipeSet != null) "${recipeSet}"
-    ++ map (name: bundledRecipes.${name}) (
-      lib.filter (
-        name: lib.elem name engines && !(cfg.search.engines == [ ] && lib.elem name setEngines)
-      ) bundledOrder
-    );
+    ++ map (name: bundledRecipes.${name}) (lib.filter (name: lib.elem name engines) bundledOrder);
 
   # The owner's webveil, on the searchcast backend. With `search.viaTor` the
   # ENGINE requests leave through Tor: with searchcast webveil is the one
@@ -236,6 +221,20 @@ lib.mkIf cfg.enable (
     # ── private search ──
     (lib.mkIf cfg.search.enable {
       environment.systemPackages = [ wp.webveil ];
+    })
+    (lib.mkIf searchcast {
+      assertions = [
+        {
+          assertion = recipeSet == null || engines != [ ];
+          message = ''
+            wabisabi.search: a recipe set is given (search.recipes or search.recipeSet)
+            but wabisabi.search.engines is empty. Set it to the engine chain, the
+            recipe names in the order to try them, e.g. [ "engine-a" "engine-b" "mwmbl" ].
+            searchcast stops at the first engine that answers, an empty answer
+            included, so the order cannot be guessed from the file names.
+          '';
+        }
+      ];
     })
     (lib.mkIf (cfg.search.enable && !searchcast) {
       nixos-modules.searxng = {

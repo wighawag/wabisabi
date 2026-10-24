@@ -69,10 +69,12 @@ wabisabi.search.recipes = {
   url = "https://example.org/releases/my-set-1.0.0.tar.gz";
   sha256 = "<the archive's sha256, as sha256sum prints it>";
 };
-# Optional: the engine chain, tried in order. Empty means the set's recipes
-# in file-name order, then Mwmbl and Marginalia as fallbacks.
+# Required with a set: the engine chain, recipe names tried in order.
+# "mwmbl" and "marginalia" add webveil's bundled engines as fallbacks.
 wabisabi.search.engines = [ "engine-a" "engine-b" "mwmbl" ];
 ```
+
+The order matters, which is why there is no default: searchcast stops at the first engine that answers, and an answer of "no results" counts. Put first the engines you trust to answer well, over Tor as well (the anonymous accounts always search through Tor), and the ones that sometimes come back empty after them.
 
 The archive is the format `searchcast install-recipes` takes (a `.tar.gz` of `*.mjs` code recipes and an optional `manifest.json`, at its root or under one directory). Nix downloads it when the system is built, checks the sha256 and unpacks it into the store; webveil loads it from there. Two things to know before you do:
 

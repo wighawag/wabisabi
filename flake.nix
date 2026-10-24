@@ -885,11 +885,19 @@
             hashAlgo = "sha256";
             toHashFormat = "sri";
           };
+          # The chain names Mwmbl but not Marginalia, so only Mwmbl's bundled
+          # file may come along.
+          fixtureChain = [
+            "engine-a"
+            "engine-b"
+            "mwmbl"
+          ];
           sc = withSearch {
             recipes = {
               inherit (recipeFixture) url;
               sha256 = fixtureSri;
             };
+            engines = fixtureChain;
           };
           scTor = withSearch {
             recipes = {
@@ -897,6 +905,7 @@
               sha256 = fixtureSri;
             };
             viaTor = true;
+            engines = fixtureChain;
           };
           scForcedSearxng = withSearch {
             recipes = {
@@ -904,8 +913,16 @@
               sha256 = fixtureSri;
             };
             backend = "searxng";
+            engines = fixtureChain;
           };
           scBare = withSearch { backend = "searchcast"; };
+          # A set with no chain: refused, since the order cannot be guessed.
+          scNoChain = withSearch {
+            recipes = {
+              inherit (recipeFixture) url;
+              sha256 = fixtureSri;
+            };
+          };
 
           readJson = text: builtins.fromJSON (builtins.unsafeDiscardStringContext text);
           ownerJson = h: readJson h.config.environment.etc."wabisabi/pi-seed/webveil.json".text;
@@ -927,12 +944,6 @@
 
           scOwner = ownerJson sc;
           setPath = lib.head scOwner.searchcast.codeRecipes;
-          fixtureChain = [
-            "engine-a"
-            "engine-b"
-            "mwmbl"
-            "marginalia"
-          ];
           searchClaims = [
             {
               name = "with no recipe set, auto is SearXNG, as before (the demo)";
@@ -947,7 +958,7 @@
               ok = noSearxng sc;
             }
             {
-              name = "the owner's webveil is on searchcast, direct, with the set and the bundled fallbacks from the store";
+              name = "the owner's webveil is on searchcast, direct, with the set and only the bundled recipes the chain names, from the store";
               ok =
                 scOwner.backend == "searchcast"
                 && scOwner.egress == { mode = "direct"; }
@@ -955,14 +966,17 @@
                 && !(scOwner ? fetchEgress)
                 && lib.hasSuffix "-wabisabi-search-recipes" setPath
                 && lib.all (lib.hasPrefix "/nix/store/") scOwner.searchcast.codeRecipes
-                && map baseNameOf (lib.tail scOwner.searchcast.codeRecipes) == [
-                  "mwmbl.mjs"
-                  "marginalia.mjs"
-                ];
+                && map baseNameOf (lib.tail scOwner.searchcast.codeRecipes) == [ "mwmbl.mjs" ];
             }
             {
-              name = "the default chain is the set's recipes in file order, then Mwmbl and Marginalia";
+              name = "the chain is the owner's, as given";
               ok = scOwner.searchcast.engines == fixtureChain;
+            }
+            {
+              name = "a recipe set with no chain is refused, saying why";
+              ok = lib.any (
+                a: !a.assertion && lib.hasInfix "wabisabi.search.engines is empty" a.message
+              ) scNoChain.config.assertions;
             }
             {
               name = "every anon account gets searchcast with the same recipes and chain, egress direct, state in memory";
@@ -1003,7 +1017,7 @@
                 && (anonJson scForcedSearxng "anon").backend == "searxng";
             }
             {
-              name = "searchcast with no recipe set is webveil's own default chain (nothing named), and still no SearXNG";
+              name = "searchcast with no recipe set is webveil's own default chain (no recipes, no chain written, as webveil requires), and still no SearXNG";
               ok =
                 let
                   o = ownerJson scBare;
@@ -1012,8 +1026,7 @@
                 o.backend == "searchcast"
                 && !(o ? searchcast)
                 && j.backend == "searchcast"
-                && j.searchcast.codeRecipes == [ ]
-                && !(j.searchcast ? engines)
+                && j.searchcast == { state.persist = false; }
                 && noSearxng scBare;
             }
           ];
@@ -1119,6 +1132,9 @@
                   "$(walk '{"disk:layout": "plain"}' | grep -c '^disk:passphrase$' || true)" "0"
                 expect "the LUKS passphrase is asked for LUKS" \
                   "$(walk '{"disk:layout": "luks"}' | grep -c '^disk:passphrase$')" "1"
+
+                # Once a URL is given, the chain cannot be left empty.
+                jq -e '.groups[].items[] | select(.key == "system:search.engines") | .required == true' ${questionsJson}
 
                 # The hash question refuses what Nix would refuse.
                 pattern=$(jq -r '.groups[].items[] | select(.key == "system:search.recipes.sha256") | .pattern' ${questionsJson})

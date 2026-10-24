@@ -260,8 +260,17 @@ ask_item() {
       set_answer "$key" "$value"
       ;;
     strlist)
-      local value
-      value=$(gum input --value "$default" --placeholder "space separated, may be empty")
+      local value required
+      required=$(jq -r '.required // false' <<<"$item")
+      while true; do
+        if [ "$required" = true ]; then
+          value=$(gum input --value "$default" --placeholder "space separated")
+        else
+          value=$(gum input --value "$default" --placeholder "space separated, may be empty")
+        fi
+        [ "$required" = true ] && [ -z "${value// /}" ] || break
+        warn "This one cannot be left empty. Again."
+      done
       set_answer "$key" "$value"
       ;;
     device)
