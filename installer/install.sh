@@ -17,6 +17,7 @@
 set -euo pipefail
 
 : "${WABISABI_QUESTIONS:?internal: questions.json path not baked in}"
+: "${WABISABI_APPLIES:?internal: applies.jq path not baked in}"
 : "${WABISABI_TEMPLATE:?internal: template path not baked in}"
 : "${WABISABI_EMIT:?internal: emit.sh path not baked in}"
 : "${WABISABI_LOCK:?internal: flake.lock path not baked in}"
@@ -174,13 +175,16 @@ ask_item() {
   help=$(jq -r '.help // ""' <<<"$item")
   default=$(jq -r '.default // ""' <<<"$item")
 
-  # Conditional questions (the LUKS passphrase only exists for the LUKS layout).
-  local cond_key cond_val
-  cond_key=$(jq -r '.onlyIf.key // ""' <<<"$item")
-  if [ -n "$cond_key" ]; then
-    cond_val=$(jq -r '.onlyIf.equals' <<<"$item")
-    [ "$(get_answer "$cond_key")" = "$cond_val" ] || return 0
-  fi
+  # Conditional questions (the LUKS passphrase only exists for the LUKS
+  # layout, the recipe set only for a backend that uses one). The rule is
+  # applies.jq, shared with the flake check that tests it; it is handed the
+  # answers its conditions name, and nothing else.
+  local cond_key known='{}'
+  while IFS= read -r cond_key; do
+    [ -n "$cond_key" ] || continue
+    known=$(jq --arg k "$cond_key" --arg v "$(get_answer "$cond_key")" '. + {($k): $v}' <<<"$known")
+  done < <(jq -r '(.onlyIf // []) | if type == "object" then [.] else . end | .[].key' <<<"$item")
+  jq -e --argjson answers "$known" -f "$WABISABI_APPLIES" <<<"$item" >/dev/null || return 0
 
   echo
   bold "$prompt"
@@ -188,8 +192,22 @@ ask_item() {
 
   case "$kind" in
     text)
-      local value
-      value=$(gum input --value "$default" --placeholder "$default")
+      # `pattern` comes from a strMatching option (whole-string, as Nix
+      # matches it); `required` from a field that cannot be left half done.
+      local value pattern required
+      pattern=$(jq -r '.pattern // ""' <<<"$item")
+      required=$(jq -r '.required // false' <<<"$item")
+      while true; do
+        value=$(gum input --value "$default" --placeholder "$default")
+        if [ -z "$value" ]; then
+          [ "$required" = true ] || break
+          warn "This one cannot be left empty. Again."
+        elif [ -n "$pattern" ] && ! [[ "$value" =~ ^($pattern)$ ]]; then
+          warn "That does not have the expected form ($pattern). Again."
+        else
+          break
+        fi
+      done
       set_answer "$key" "$value"
       ;;
     password)
@@ -242,8 +260,17 @@ ask_item() {
       set_answer "$key" "$value"
       ;;
     strlist)
-      local value
-      value=$(gum input --value "$default" --placeholder "space separated, may be empty")
+      local value required
+      required=$(jq -r '.required // false' <<<"$item")
+      while true; do
+        if [ "$required" = true ]; then
+          value=$(gum input --value "$default" --placeholder "space separated")
+        else
+          value=$(gum input --value "$default" --placeholder "space separated, may be empty")
+        fi
+        [ "$required" = true ] && [ -z "${value// /}" ] || break
+        warn "This one cannot be left empty. Again."
+      done
       set_answer "$key" "$value"
       ;;
     device)

@@ -68,19 +68,58 @@ let
   kindOf =
     opt:
     let
-      n = opt.type.name;
+      # The functor's name: a strMatching type's own name carries its pattern.
+      n = opt.type.functor.name or opt.type.name;
     in
     if n == "bool" then
       "bool"
     else if n == "enum" then
       "enum"
-    else if n == "str" || n == "string" then
+    else if n == "str" || n == "string" || n == "strMatching" then
       "text"
+    else if n == "listOf" && opt.type.nestedTypes.elemType.name == "str" then
+      "strlist"
     else
       throw "wabisabi installer: option type '${n}' has no question kind. Teach installer/questions.nix how to ask it.";
 
+  # A strMatching option's pattern, for the installer to check an answer
+  # against before accepting it (Nix's builtins.match is a whole-string POSIX
+  # ERE, which the installer anchors to mean the same).
+  patternOf = opt: if (opt.type.functor.name or "") == "strMatching" then opt.type.functor.payload.pattern else null;
+
+  # One question for one declared option (or one field of one).
+  optionQuestion =
+    {
+      key,
+      opt,
+      path,
+      layer,
+      help,
+      helpFull,
+    }:
+    {
+      inherit key help helpFull;
+      kind = kindOf opt;
+      prompt = "wabisabi.${path}";
+      default = renderDefault opt;
+      values = opt.type.functor.payload.values or [ ];
+      pattern = patternOf opt;
+      emit = {
+        attr = "wabisabi.${path}";
+        block = layer;
+      };
+    };
+
+  # The plan's condition(s) as a list, whichever form it was written in.
+  conditions = c: if c == null then [ ] else if lib.isList c then c else [ c ];
+
   # An item is either a reference to a declared option, or one of the
   # installer's own questions (identity, disks), which have no declaration.
+  # Each resolves to a LIST of questions: one, except for an option whose
+  # value is a null-or-record (search.recipes), which is asked field by field
+  # as the plan lists them, emitted as `wabisabi.<option>.<field>`. Its later
+  # fields are asked only when the first was answered, so an empty first
+  # answer leaves the option null.
   resolve =
     item:
     if item ? option then
@@ -91,33 +130,80 @@ let
             or (throw "wabisabi installer: plan.nix asks about '${key}', which is not a declared option.");
         path = lib.elemAt (lib.splitString ":" key) 1;
         layer = lib.head (lib.splitString ":" key);
+        onlyIf = conditions (item.onlyIf or null);
+        withCondition =
+          extra: q:
+          q
+          // lib.optionalAttrs (onlyIf ++ extra != [ ]) { onlyIf = onlyIf ++ extra; }
+          // lib.optionalAttrs (item.required or false) { required = true; };
       in
-      {
-        inherit key;
-        kind = kindOf opt;
-        prompt = "wabisabi.${path}";
-        help = firstParagraph (opt.description or "");
-        helpFull = opt.description or "";
-        default = renderDefault opt;
-        values = opt.type.functor.payload.values or [ ];
-        emit = {
-          attr = "wabisabi.${path}";
-          block = layer;
-        };
-      }
+      if item ? fields then
+        let
+          sub = opt.type.nestedTypes.elemType.getSubOptions [ ];
+          firstKey = "${key}.${lib.head item.fields}";
+          fieldQuestion =
+            i: field:
+            let
+              subOpt =
+                sub.${field} or (throw "wabisabi installer: plan.nix asks for field '${field}' of '${key}', which has none.");
+              first = i == 0;
+            in
+            withCondition (lib.optional (!first) {
+              key = firstKey;
+              notEquals = "";
+            }) (optionQuestion {
+              key = "${key}.${field}";
+              opt = subOpt;
+              path = "${path}.${field}";
+              inherit layer;
+              # The option's own first paragraph goes with its first field,
+              # since that is where its warnings must be read.
+              help =
+                lib.optionalString first (firstParagraph (opt.description or "") + " ")
+                + firstParagraph (subOpt.description or "");
+              helpFull = lib.optionalString first ((opt.description or "") + "\n\n") + (subOpt.description or "");
+            })
+            # A later field is required once the first is given: half a record
+            # is a config that does not evaluate.
+            // lib.optionalAttrs (!first) { required = true; };
+          missing = lib.subtractLists item.fields (
+            lib.attrNames (lib.filterAttrs (n: _: !lib.hasPrefix "_" n) sub)
+          );
+        in
+        lib.throwIf (missing != [ ])
+          "wabisabi installer: plan.nix asks '${key}' field by field but leaves out: ${lib.concatStringsSep ", " missing}"
+          (lib.imap0 fieldQuestion item.fields)
+      else
+        [
+          (withCondition [ ] (optionQuestion {
+            inherit
+              key
+              opt
+              path
+              layer
+              ;
+            help = firstParagraph (opt.description or "");
+            helpFull = opt.description or "";
+          }))
+        ]
     else
-      {
-        values = [ ];
-        default = "";
-        helpFull = item.help or "";
-        emit = null;
-      }
-      // item;
+      [
+        (
+          {
+            values = [ ];
+            default = "";
+            helpFull = item.help or "";
+            emit = null;
+          }
+          // item
+        )
+      ];
 
-  groups = map (g: g // { items = map resolve g.items; }) plan.groups;
+  groups = map (g: g // { items = lib.concatMap resolve g.items; }) plan.groups;
 
-  asked = lib.concatMap (g: map (i: i.key) g.items) groups;
-  askedOptions = lib.filter (k: declared ? ${k}) asked;
+  # Coverage counts the plan's option references, so an option asked field by
+  # field counts once, as itself.
+  askedOptions = lib.concatMap (g: map (i: i.option) (lib.filter (i: i ? option) g.items)) plan.groups;
   classified = askedOptions ++ lib.attrNames plan.skip;
 
   unclassified = lib.subtractLists classified (lib.attrNames declared);

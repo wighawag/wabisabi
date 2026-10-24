@@ -28,6 +28,7 @@
   "home:apps.passwords": "true",
   "home:apps.syncthing": "true",
   "system:anon.enable": "false",
+  "system:search.backend": "searxng",
   "system:search.viaTor": "true",
   "system:agents.enable": "true"
 }

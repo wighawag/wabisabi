@@ -38,7 +38,7 @@ or to leave it.
 | Theme | Sumi: indigo ink and warm paper, from the enso wallpaper; Catppuccin Mocha as a choice | CC0 / MIT |
 | Local AI model | llama.cpp + Gemma 4 E4B, on the CPU, on a unix socket | MIT / Apache-2.0 |
 | Coding agent | pi, with wherever (a web UI for its sessions) | MIT / AGPL |
-| Search | SearXNG + webveil (no account, no profile) | AGPL |
+| Search | webveil, on SearXNG or on its own searchcast engines (no account, no profile) | AGPL |
 | Recall | memonaut (search your past agent sessions) | AGPL |
 | Browser automation | webhands on nixpkgs' Chromium | AGPL / BSD |
 | Terminal tools | zellij, direnv, eza, bat; nix-ld for foreign binaries | MIT / Apache |
@@ -51,6 +51,39 @@ A wabisabi machine comes with an assistant that needs no account anywhere: a sma
 It also comes with three **anonymous accounts** (`anon`, `anon-john`, `anon-jane`) whose every connection the kernel forces through Tor, fail-closed: if Tor is down they have no network, never your address. Each is proven with `anonctl verify` before it is used, carries nothing of yours, and has its own agent (on the same local model, reached over a unix socket so their jail needs no exemption) and its own web UI (`sudo anon-reconcile links`).
 
 The building blocks live in [nixos-modules](https://github.com/wighawag/nixos-modules), usable on any NixOS machine; wabisabi switches them on. All of it is on by default and each part is one option (`wabisabi.llm.enable`, `.search.enable`, `.agents.enable`, `.anon.enable`); the installer asks. How it fits together, what was verified and what was not: [`notes/agents.md`](notes/agents.md).
+
+### Web search: SearXNG or searchcast
+
+Agents (and you, with `webveil search`) search through webveil, which has two backends. A machine uses one, for the owner and the anonymous accounts alike, chosen by `wabisabi.search.backend`:
+
+- **SearXNG** (`"searxng"`): a local SearXNG asks many search engines at once. It needs no setup. In practice many engines refuse it (CAPTCHAs, rate limits), more so over Tor, so its answers often come from whichever single engine still lets it through, and when that one stops, search stops.
+- **searchcast** (`"searchcast"`): webveil asks the engines itself, with a real browser's network fingerprint, which gets through where SearXNG does not, directly and over Tor. No SearXNG runs at all. Which engines it asks, and how, is defined by **recipes**: small JavaScript modules, one per engine.
+- **`"auto"`** (the default): searchcast when you give a recipe set, SearXNG otherwise.
+
+The reason for the default: searchcast is only as good as its recipes. With a good recipe set of your own it is at least as good as SearXNG and does not hang on one engine; without one it runs webveil's bundled public engines (Mwmbl and Marginalia), which are weak alone, with off-topic or empty answers to many queries, so SearXNG is the better choice.
+
+To use your own recipe set, give the release archive and its sha256 (the installer asks, under "AI and privacy", once you choose to review the options):
+
+```nix
+wabisabi.search.recipes = {
+  url = "https://example.org/releases/my-set-1.0.0.tar.gz";
+  sha256 = "<the archive's sha256, as sha256sum prints it>";
+};
+# Required with a set: the engine chain, recipe names tried in order.
+# "mwmbl" and "marginalia" add webveil's bundled engines as fallbacks.
+wabisabi.search.engines = [ "engine-a" "engine-b" "mwmbl" ];
+```
+
+The order matters, which is why there is no default: searchcast stops at the first engine that answers, and an answer of "no results" counts. Put first the engines you trust to answer well, over Tor as well (the anonymous accounts always search through Tor), and the ones that sometimes come back empty after them.
+
+The archive is the format `searchcast install-recipes` takes (a `.tar.gz` of `*.mjs` code recipes and an optional `manifest.json`, at its root or under one directory). Nix downloads it when the system is built, checks the sha256 and unpacks it into the store; webveil loads it from there. Two things to know before you do:
+
+- **The URL goes into your config.** If you publish your config repo, you publish where your recipes come from. For a set you keep private, put it in a private flake input or a local path and set `wabisabi.search.recipeSet` to it instead.
+- **Recipes are code**, run by webveil with full Node access, as you and as each anonymous account. Pin only a set you trust: the sha256 is that trust decision, and nothing but those exact bytes is ever loaded.
+
+`wabisabi.search.viaTor` sends the searches through Tor with either backend. With searchcast that is webveil's own egress, so `web_fetch` goes through Tor as well. The download of the recipe set itself does not: it comes from the machine's own address when the system is built.
+
+To switch back to SearXNG, set `wabisabi.search.backend = "searxng";` (the recipe set can stay in the config, unused) or remove `wabisabi.search.recipes`, then rebuild.
 
 ## Architecture
 

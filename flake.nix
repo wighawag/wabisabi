@@ -357,6 +357,72 @@
           "${emitted}/configuration.nix"
         ];
       };
+
+      # ── the searchcast backend, against a FIXTURE recipe set ──
+      # Never a real set: two code recipes that answer from memory (no request
+      # anywhere), packed the way `searchcast install-recipes` takes a set
+      # (one top-level directory, a manifest, *.mjs files). It is served to
+      # the real `search.recipes` path as a file:// URL: the URL carries the
+      # archive's store path as context, so the fetch sees it in the sandbox,
+      # and the whole route (fetchurl against the sha256, the strict unpack,
+      # the chain read from the set's file names) runs with no network.
+      recipeFixtureArchive = pkgs.runCommand "wabisabi-fixture-recipes.tar.gz" { } ''
+        mkdir fixture-set
+        echo '{"name": "fixture-set", "version": "0.0.0"}' > fixture-set/manifest.json
+        for e in engine-a engine-b; do
+          printf '%s\n' \
+            'export default {' \
+            "  name: '$e'," \
+            '  async search(query) {' \
+            "    return [{title: '$e answer', url: 'https://example.invalid/$e?q=' + encodeURIComponent(query)}];" \
+            '  },' \
+            '};' > fixture-set/$e.mjs
+        done
+        tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@1 -czf $out fixture-set
+      '';
+      recipeFixture = {
+        url = "file://${recipeFixtureArchive}";
+        # Hex, as a publisher hands it out and the installer asks for it.
+        sha256 = builtins.hashFile "sha256" recipeFixtureArchive;
+      };
+
+      # The installer's route: the recipe answers emitted into a config.
+      emittedSearchcast =
+        pkgs.runCommand "wabisabi-emitted-flake-searchcast"
+          {
+            nativeBuildInputs = [
+              pkgs.jq
+              pkgs.python3
+            ];
+          }
+          ''
+            # test-answers.json forces searxng (its SearXNG checks must not
+            # depend on what auto means); this one answers auto.
+            jq '.["system:search.backend"] = "auto"
+                | .["system:search.recipes.url"] = "${recipeFixture.url}"
+                | .["system:search.recipes.sha256"] = "${recipeFixture.sha256}"
+                | .["system:search.engines"] = "engine-b engine-a"' \
+              ${./installer/test-answers.json} > answers.json
+            bash ${./installer/emit.sh} \
+              --questions ${questionsJson} \
+              --answers answers.json \
+              --template ${./template} \
+              --out $out \
+              --state-version ${release}
+            cp ${./installer/test-hardware.nix} $out/hardware-configuration.nix
+          '';
+
+      emittedSearchcastSystem = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = {
+          wabisabi = self;
+        };
+        modules = [
+          self.nixosModules.wabisabi
+          home-manager.nixosModules.home-manager
+          "${emittedSearchcast}/configuration.nix"
+        ];
+      };
     in
     {
       # System-level layer: services, programs, sane hardware-agnostic defaults.
@@ -541,6 +607,22 @@
               name = "the owner's pi gets the local-model extension";
               expected = true;
               actual = c.environment.etc ? "wabisabi/pi-extensions/pi-wabisabi-local";
+            }
+            # test-answers.json answers backend = searxng, so this is checked
+            # on a machine forced to SearXNG, whatever `auto` comes to mean.
+            {
+              name = "the backend answer is honoured (searxng: the owner's webveil asks the local SearXNG)";
+              expected = {
+                searxng = true;
+                backend = "searxng";
+              };
+              actual = {
+                searxng = c.nixos-modules.searxng.enable;
+                backend =
+                  (builtins.fromJSON (
+                    builtins.unsafeDiscardStringContext c.environment.etc."wabisabi/pi-seed/webveil.json".text
+                  )).backend;
+              };
             }
             {
               name = "search through Tor, answered, reaches SearXNG";
@@ -786,6 +868,213 @@
             }
           ];
           agentFailures = map (c: c.name) (lib.filter (c: !c.ok) (agentClaims ++ shellClaims));
+
+          # ── the search backend, both ways ──
+          # The demo host with the FIXTURE recipe set given the way an owner
+          # gives one (`search.recipes`, here with an SRI hash; the emitted
+          # config below uses hex), and variants of it. `auto` must turn it
+          # into searchcast for the owner and every anon account, with no
+          # SearXNG anywhere; forcing `searxng` must give today's setup back.
+          withSearch =
+            m:
+            self.nixosConfigurations.demo.extendModules {
+              modules = [ { wabisabi.search = m; } ];
+            };
+          fixtureSri = builtins.convertHash {
+            hash = recipeFixture.sha256;
+            hashAlgo = "sha256";
+            toHashFormat = "sri";
+          };
+          # The chain names Mwmbl but not Marginalia, so only Mwmbl's bundled
+          # file may come along.
+          fixtureChain = [
+            "engine-a"
+            "engine-b"
+            "mwmbl"
+          ];
+          sc = withSearch {
+            recipes = {
+              inherit (recipeFixture) url;
+              sha256 = fixtureSri;
+            };
+            engines = fixtureChain;
+          };
+          scTor = withSearch {
+            recipes = {
+              inherit (recipeFixture) url;
+              sha256 = fixtureSri;
+            };
+            viaTor = true;
+            engines = fixtureChain;
+          };
+          scForcedSearxng = withSearch {
+            recipes = {
+              inherit (recipeFixture) url;
+              sha256 = fixtureSri;
+            };
+            backend = "searxng";
+            engines = fixtureChain;
+          };
+          scBare = withSearch { backend = "searchcast"; };
+          # A set with no chain: refused, since the order cannot be guessed.
+          scNoChain = withSearch {
+            recipes = {
+              inherit (recipeFixture) url;
+              sha256 = fixtureSri;
+            };
+          };
+
+          readJson = text: builtins.fromJSON (builtins.unsafeDiscardStringContext text);
+          ownerJson = h: readJson h.config.environment.etc."wabisabi/pi-seed/webveil.json".text;
+          anonJson = h: a: readJson h.config.environment.etc."anon-home/webveil-${a}.json".text;
+          anonSlots = [
+            "anon"
+            "anon-john"
+            "anon-jane"
+          ];
+          noSearxng =
+            h:
+            !(h.config.systemd.services ? wabisabi-searxng)
+            && !(h.config.systemd.sockets ? wabisabi-searxng)
+            && !(lib.any (lib.hasPrefix "anon-search") (
+              lib.attrNames h.config.systemd.sockets ++ lib.attrNames h.config.systemd.services
+            ))
+            && !h.config.nixos-modules.searxng.enable
+            && !h.config.nixos-modules.anonSearch.enable;
+
+          scOwner = ownerJson sc;
+          setPath = lib.head scOwner.searchcast.codeRecipes;
+          searchClaims = [
+            {
+              name = "with no recipe set, auto is SearXNG, as before (the demo)";
+              ok =
+                d.nixos-modules.searxng.enable
+                && d.nixos-modules.anonSearch.enable
+                && (ownerJson self.nixosConfigurations.demo).backend == "searxng"
+                && d.nixos-modules.anonHome.webTools.backend == "searxng";
+            }
+            {
+              name = "with a recipe set, auto is searchcast and no SearXNG runs: no unit, no anon-search socket";
+              ok = noSearxng sc;
+            }
+            {
+              name = "the owner's webveil is on searchcast, direct, with the set and only the bundled recipes the chain names, from the store";
+              ok =
+                scOwner.backend == "searchcast"
+                && scOwner.egress == { mode = "direct"; }
+                && !(scOwner ? baseUrl)
+                && !(scOwner ? fetchEgress)
+                && lib.hasSuffix "-wabisabi-search-recipes" setPath
+                && lib.all (lib.hasPrefix "/nix/store/") scOwner.searchcast.codeRecipes
+                && map baseNameOf (lib.tail scOwner.searchcast.codeRecipes) == [ "mwmbl.mjs" ];
+            }
+            {
+              name = "the chain is the owner's, as given";
+              ok = scOwner.searchcast.engines == fixtureChain;
+            }
+            {
+              name = "a recipe set with no chain is refused, saying why";
+              ok = lib.any (
+                a: !a.assertion && lib.hasInfix "wabisabi.search.engines is empty" a.message
+              ) scNoChain.config.assertions;
+            }
+            {
+              name = "every anon account gets searchcast with the same recipes and chain, egress direct, state in memory";
+              ok = lib.all (
+                a:
+                let
+                  j = anonJson sc a;
+                in
+                j.backend == "searchcast"
+                && j.egress == { mode = "direct"; }
+                && !(j ? baseUrl)
+                && j.searchcast.state.persist == false
+                && j.searchcast.codeRecipes == scOwner.searchcast.codeRecipes
+                && j.searchcast.engines == fixtureChain
+              ) anonSlots;
+            }
+            {
+              name = "the owner is not put in SearXNG's group when there is none";
+              ok = !(lib.elem sc.config.nixos-modules.searxng.clientGroup sc.config.users.users.demo.extraGroups);
+            }
+            {
+              name = "search through Tor, on searchcast, is the owner's webveil egress (web_fetch inherits it); the anon accounts stay direct under anonctl";
+              ok =
+                (ownerJson scTor).egress == {
+                  mode = "socks5";
+                  url = "socks5h://127.0.0.1:9050";
+                }
+                && !((ownerJson scTor) ? fetchEgress)
+                && (anonJson scTor "anon").egress == { mode = "direct"; }
+                && noSearxng scTor;
+            }
+            {
+              name = "backend = searxng wins over a recipe set: today's SearXNG setup, owner and anon";
+              ok =
+                scForcedSearxng.config.nixos-modules.searxng.enable
+                && scForcedSearxng.config.nixos-modules.anonSearch.enable
+                && ownerJson scForcedSearxng == ownerJson self.nixosConfigurations.demo
+                && (anonJson scForcedSearxng "anon").backend == "searxng";
+            }
+            {
+              name = "searchcast with no recipe set is webveil's own default chain (no recipes, no chain written, as webveil requires), and still no SearXNG";
+              ok =
+                let
+                  o = ownerJson scBare;
+                  j = anonJson scBare "anon";
+                in
+                o.backend == "searchcast"
+                && !(o ? searchcast)
+                && j.backend == "searchcast"
+                && j.searchcast == { state.persist = false; }
+                && noSearxng scBare;
+            }
+          ];
+          searchFailures = map (c: c.name) (lib.filter (c: !c.ok) searchClaims);
+
+          # The installer's route to searchcast: the recipe answers, emitted.
+          e = emittedSearchcastSystem.config;
+          eOwner = readJson e.environment.etc."wabisabi/pi-seed/webveil.json".text;
+          emittedSearchcastExpectations = [
+            {
+              name = "the recipe answers make the emitted machine searchcast (auto), with no SearXNG";
+              expected = {
+                backend = "searchcast";
+                searxng = false;
+              };
+              actual = {
+                inherit (eOwner) backend;
+                searxng = e.nixos-modules.searxng.enable;
+              };
+            }
+            {
+              name = "the answered chain is used as given, with only the set behind it";
+              expected = {
+                engines = [
+                  "engine-b"
+                  "engine-a"
+                ];
+                recipes = 1;
+              };
+              actual = {
+                inherit (eOwner.searchcast) engines;
+                recipes = lib.length eOwner.searchcast.codeRecipes;
+              };
+            }
+            {
+              name = "search through Tor, answered, is the searchcast egress";
+              expected = "socks5h://127.0.0.1:9050";
+              actual = eOwner.egress.url or null;
+            }
+            {
+              name = "the recipe answers are written into the config (as the question says)";
+              expected = true;
+              actual = lib.hasInfix (builtins.unsafeDiscardStringContext ''wabisabi.search.recipes.url = "${recipeFixture.url}";'') (
+                builtins.readFile "${emittedSearchcast}/configuration.nix"
+              );
+            }
+          ];
+          emittedSearchcastFailures = lib.filter (x: x.actual != x.expected) emittedSearchcastExpectations;
         in
         {
           agent-layer = lib.throwIf (agentFailures != [ ]) ''
@@ -800,6 +1089,127 @@
 
           # Forces the coverage rule in installer/questions.nix.
           installer-questions = questionsJson;
+
+          # Which questions the installer ASKS, walked in order with the rule
+          # it runs (applies.jq) over sample answers: the recipe set only for
+          # a backend that can use one, its hash and chain only once a URL is
+          # given, and the existing conditions (the LUKS passphrase) intact.
+          installer-question-flow =
+            pkgs.runCommand "wabisabi-installer-question-flow" { nativeBuildInputs = [ pkgs.jq ]; }
+              ''
+                # walk SCENARIO: answer every asked question from SCENARIO,
+                # else with its default; print the asked keys, in order.
+                walk() {
+                  local answers='{}' item key value
+                  while IFS= read -r item; do
+                    jq -e --argjson answers "$answers" -f ${./installer/applies.jq} <<<"$item" >/dev/null || continue
+                    key=$(jq -r .key <<<"$item")
+                    value=$(jq -r --arg k "$key" --argjson item "$item" '.[$k] // $item.default // ""' <<<"$1")
+                    answers=$(jq --arg k "$key" --arg v "$value" '. + {($k): $v}' <<<"$answers")
+                    echo "$key"
+                  done < <(jq -c '.groups[].items[]' ${questionsJson})
+                }
+                search() { walk "$1" | grep '^system:search\.' | tr '\n' ' '; }
+                expect() {
+                  if [ "$2" != "$3" ]; then
+                    echo "$1:"; echo "  expected: $3"; echo "  got:      $2"; exit 1
+                  fi
+                }
+
+                expect "backend searxng: no recipe questions" \
+                  "$(search '{"system:search.backend": "searxng"}')" \
+                  "system:search.enable system:search.backend system:search.viaTor "
+                expect "auto, no URL: the URL is offered, nothing after it" \
+                  "$(search '{}')" \
+                  "system:search.enable system:search.backend system:search.recipes.url system:search.viaTor "
+                expect "auto with a URL: its hash and the chain follow, in order" \
+                  "$(search '{"system:search.recipes.url": "https://example.invalid/set.tar.gz"}')" \
+                  "system:search.enable system:search.backend system:search.recipes.url system:search.recipes.sha256 system:search.engines system:search.viaTor "
+                expect "searchcast with a URL: the same" \
+                  "$(search '{"system:search.backend": "searchcast", "system:search.recipes.url": "https://example.invalid/set.tar.gz"}')" \
+                  "system:search.enable system:search.backend system:search.recipes.url system:search.recipes.sha256 system:search.engines system:search.viaTor "
+                expect "the LUKS passphrase still follows its layout" \
+                  "$(walk '{"disk:layout": "plain"}' | grep -c '^disk:passphrase$' || true)" "0"
+                expect "the LUKS passphrase is asked for LUKS" \
+                  "$(walk '{"disk:layout": "luks"}' | grep -c '^disk:passphrase$')" "1"
+
+                # Once a URL is given, the chain cannot be left empty.
+                jq -e '.groups[].items[] | select(.key == "system:search.engines") | .required == true' ${questionsJson}
+
+                # The hash question refuses what Nix would refuse.
+                pattern=$(jq -r '.groups[].items[] | select(.key == "system:search.recipes.sha256") | .pattern' ${questionsJson})
+                [[ "${recipeFixture.sha256}" =~ ^($pattern)$ ]]
+                [[ "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=" =~ ^($pattern)$ ]]
+                ! [[ "not-a-hash" =~ ^($pattern)$ ]]
+                ! [[ "${recipeFixture.sha256}x" =~ ^($pattern)$ ]]
+                touch $out
+              '';
+
+          search-backend = lib.throwIf (searchFailures != [ ]) ''
+            wabisabi: the search backend no longer holds these claims:
+              ${lib.concatStringsSep "\n  " searchFailures}
+          '' pkgs.writeText "wabisabi-search-backend" (lib.concatMapStringsSep "\n" (c: c.name) searchClaims);
+
+          emit-searchcast =
+            lib.throwIf (emittedSearchcastFailures != [ ])
+              ''
+                wabisabi: the installer's recipe answers did not do what was answered:
+                  ${lib.concatMapStringsSep "\n  " (
+                    x: "${x.name}: expected ${builtins.toJSON x.expected}, got ${builtins.toJSON x.actual}"
+                  ) emittedSearchcastFailures}
+              ''
+              pkgs.runCommand "wabisabi-emit-searchcast" { }
+              ''
+                echo ${builtins.hashString "sha256" emittedSearchcastSystem.config.system.build.toplevel.drvPath} > $out
+              '';
+
+          # The generated configs, RUN: webveil (the package the bundled
+          # recipe paths come from) searches with the owner's and an anon
+          # account's config exactly as the demo-with-fixture host writes
+          # them. Building this fetches the fixture through the real
+          # fetchurl-and-unpack route. The fixture's first engine answers from
+          # memory, and a build sandbox has no network anyway, so no request
+          # leaves. Then the unpack script's refusals, on bad archives.
+          searchcast-runs =
+            pkgs.runCommand "wabisabi-searchcast-runs"
+              {
+                nativeBuildInputs = [
+                  pkgs.jq
+                  pkgs.gnutar
+                  pkgs.gzip
+                ];
+              }
+              ''
+                run() {
+                  local home=$TMPDIR/home-$1
+                  mkdir -p $home/.config/webveil
+                  cp $2 $home/.config/webveil/config.json
+                  HOME=$home XDG_CONFIG_HOME=$home/.config XDG_STATE_HOME=$home/.local/state \
+                    ${sc.config.nixos-modules.pkgs.webveil}/bin/webveil search hello --format json > $TMPDIR/$1.json
+                  jq -e '.results[0].title == "engine-a answer"' $TMPDIR/$1.json
+                }
+                run owner ${sc.config.environment.etc."wabisabi/pi-seed/webveil.json".source}
+                run anon ${sc.config.environment.etc."anon-home/webveil-anon.json".source}
+
+                unpack=${./modules/agents/unpack-recipe-set.sh}
+                mk() { tar --sort=name --owner=0 --group=0 --mtime=@1 -czf $TMPDIR/$1.tar.gz -C $TMPDIR/$1 .; }
+                refuses() {
+                  if bash $unpack $TMPDIR/$1.tar.gz $TMPDIR/out-$1 2>$TMPDIR/err-$1; then
+                    echo "the unpack accepted a bad set: $1"; exit 1
+                  fi
+                  grep -q "$2" $TMPDIR/err-$1 || { cat $TMPDIR/err-$1; exit 1; }
+                }
+                mkdir -p $TMPDIR/flat $TMPDIR/nested/set/sub $TMPDIR/link/set $TMPDIR/hidden/set $TMPDIR/other/set
+                echo 'export default {}' > $TMPDIR/flat/engine-a.mjs
+                mk flat
+                bash $unpack $TMPDIR/flat.tar.gz $TMPDIR/out-flat
+                test -f $TMPDIR/out-flat/engine-a.mjs
+                echo x > $TMPDIR/nested/set/sub/engine-a.mjs; mk nested; refuses nested "nested directory"
+                ln -s /etc/passwd $TMPDIR/link/set/engine-a.mjs; mk link; refuses link "only regular files"
+                echo x > $TMPDIR/hidden/set/.engine-a.mjs; mk hidden; refuses hidden "hidden file"
+                echo x > $TMPDIR/other/set/run.sh; mk other; refuses other "not a recipe file"
+                touch $out
+              '';
 
           installer-lint =
             pkgs.runCommand "wabisabi-installer-lint" { nativeBuildInputs = [ pkgs.shellcheck ]; }

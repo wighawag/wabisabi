@@ -20,6 +20,8 @@
 #
 #   SearXNG ──── /run/wabisabi-search/search.sock ── owner's webveil / pi
 #   SearXNG per anon account, as that account ── its own Tor circuit
+#     or, with search.backend searchcast, no SearXNG at all:
+#   webveil (owner, each anon account) ── recipes from the store ── engines
 #
 #   anon accounts: every packet forced through Tor by anonctl, fail-closed;
 #   each with a wherever on a socket, routed by a loopback-only Caddy at
@@ -47,6 +49,106 @@ let
   ];
 
   torSocks = "socks5h://127.0.0.1:9050";
+
+  # ── the search backend: one per machine, owner and anon accounts alike ──
+  #
+  # The recipe set, unpacked into the store: the owner's `search.recipeSet`
+  # as given, else the `search.recipes` archive, fetched with fetchurl so its
+  # sha256 is the ARCHIVE's (the value `searchcast install-recipes --sha256`
+  # takes and `sha256sum` prints), not fetchzip's hash of the unpacked tree,
+  # which no publisher would hand out. The unpack is strict: see the script.
+  recipeSet =
+    if cfg.search.recipeSet != null then
+      cfg.search.recipeSet
+    else if cfg.search.recipes != null then
+      unpackRecipeSet (
+        pkgs.fetchurl (
+          {
+            name = "wabisabi-search-recipes.tar.gz";
+            inherit (cfg.search.recipes) url;
+          }
+          // (
+            if lib.hasPrefix "sha256-" cfg.search.recipes.sha256 then
+              { hash = cfg.search.recipes.sha256; }
+            else
+              { inherit (cfg.search.recipes) sha256; }
+          )
+        )
+      )
+    else
+      null;
+
+  unpackRecipeSet =
+    archive:
+    pkgs.runCommand "wabisabi-search-recipes" { } ''
+      bash ${./agents/unpack-recipe-set.sh} ${archive} $out
+    '';
+
+  backend =
+    if cfg.search.backend != "auto" then
+      cfg.search.backend
+    else if recipeSet != null then
+      "searchcast"
+    else
+      "searxng";
+  searchcast = backend == "searchcast";
+
+  # webveil's bundled recipes, which a chain of our own can still use: naming
+  # any code recipe replaces webveil's default chain, so to keep one of these
+  # its file has to be listed too. From the CLI package; they import nothing.
+  bundledRecipes = {
+    mwmbl = "${wp.webveil}/lib/node_modules/webveil/recipes/mwmbl.mjs";
+    marginalia = "${wp.webveil}/lib/node_modules/webveil/recipes/marginalia.mjs";
+  };
+  # webveil's own default order.
+  bundledOrder = [
+    "mwmbl"
+    "marginalia"
+  ];
+
+  # The chain is the owner's, verbatim. With a recipe set it is REQUIRED (an
+  # assertion below): searchcast stops at the first engine that ANSWERS, and
+  # an engine that answers "no results" counts, so the order is a judgement
+  # about the engines, which only whoever chose the set can make. A default
+  # read off the set's file names was tried first and failed in a VM test on
+  # 2026-10-24: over Tor, the alphabetically first engine of a real set
+  # answered empty, so every anon search returned nothing while another engine
+  # of the same set had 9 relevant results.
+  engines = cfg.search.engines;
+
+  # The set as ONE directory (webveil loads every *.js/*.mjs in it), plus the
+  # bundled recipes the chain names. With neither, the list is empty and
+  # nixos-modules leaves the key out: webveil's own default chain.
+  codeRecipes =
+    lib.optional (recipeSet != null) "${recipeSet}"
+    ++ map (name: bundledRecipes.${name}) (lib.filter (name: lib.elem name engines) bundledOrder);
+
+  # The owner's webveil, on the searchcast backend. With `search.viaTor` the
+  # ENGINE requests leave through Tor: with searchcast webveil is the one
+  # talking to the engines, so that is its `egress`, not `fetchEgress`.
+  # fetchEgress is left unset and inherits it, so web_fetch goes through Tor
+  # too: a search that hides the address, followed by a fetch of the result
+  # from the real one, would hand the same interest to the result's site.
+  ownerSearchcastConfig = {
+    backend = "searchcast";
+    egress =
+      if cfg.search.viaTor then
+        {
+          mode = "socks5";
+          url = torSocks;
+        }
+      else
+        { mode = "direct"; };
+  }
+  // lib.optionalAttrs (engines != [ ]) {
+    # Passed even when no recipe file backs it, so an engine name nothing
+    # provides is webveil's "unknown engine" error rather than a silent
+    # fall back to its default chain.
+    searchcast = {
+      inherit engines;
+    }
+    // lib.optionalAttrs (codeRecipes != [ ]) { inherit codeRecipes; };
+  };
 
   ownerHome = config.users.users.${cfg.user}.home or "/home/${cfg.user}";
 
@@ -118,12 +220,28 @@ lib.mkIf cfg.enable (
 
     # ── private search ──
     (lib.mkIf cfg.search.enable {
+      environment.systemPackages = [ wp.webveil ];
+    })
+    (lib.mkIf searchcast {
+      assertions = [
+        {
+          assertion = recipeSet == null || engines != [ ];
+          message = ''
+            wabisabi.search: a recipe set is given (search.recipes or search.recipeSet)
+            but wabisabi.search.engines is empty. Set it to the engine chain, the
+            recipe names in the order to try them, e.g. [ "engine-a" "engine-b" "mwmbl" ].
+            searchcast stops at the first engine that answers, an empty answer
+            included, so the order cannot be guessed from the file names.
+          '';
+        }
+      ];
+    })
+    (lib.mkIf (cfg.search.enable && !searchcast) {
       nixos-modules.searxng = {
         enable = lib.mkDefault true;
         egressProxies = lib.mkIf cfg.search.viaTor (lib.mkDefault [ torSocks ]);
         requestTimeout = lib.mkIf cfg.search.viaTor (lib.mkDefault 10.0);
       };
-      environment.systemPackages = [ wp.webveil ];
     })
 
     # ── the owner's agent ──
@@ -143,13 +261,18 @@ lib.mkIf cfg.enable (
           }
         );
         webveilConfig = lib.mkIf cfg.search.enable (
-          lib.mkDefault {
-            backend = "searxng";
-            baseUrl = svc.searxng.baseUrl;
-            # The BACKEND hop is a local socket; proxying it would be fake
-            # anonymity, and webveil refuses the combination.
-            egress.mode = "direct";
-          }
+          lib.mkDefault (
+            if searchcast then
+              ownerSearchcastConfig
+            else
+              {
+                backend = "searxng";
+                baseUrl = svc.searxng.baseUrl;
+                # The BACKEND hop is a local socket; proxying it would be fake
+                # anonymity, and webveil refuses the combination.
+                egress.mode = "direct";
+              }
+          )
         );
       };
 
@@ -248,10 +371,18 @@ lib.mkIf cfg.enable (
       nixos-modules.anonHome = {
         enable = lib.mkDefault true;
         # web_fetch needs no backend and leaves through the account's own
-        # circuit; web_search uses the per-account SearXNG below.
+        # circuit; web_search uses the per-account SearXNG below, or, on the
+        # searchcast backend, the same recipes and chain as the owner (with
+        # engine state in memory and egress direct, which nixos-modules sets:
+        # anonctl already forces every packet through the account's circuit).
         webTools = {
           enable = lib.mkDefault true;
           package = lib.mkDefault wp.pi-webveil;
+          backend = lib.mkDefault backend;
+          searchcast = lib.mkIf searchcast {
+            codeRecipes = lib.mkDefault codeRecipes;
+            engines = lib.mkDefault engines;
+          };
         };
         extensions = {
           memonaut-pi = lib.mkDefault wp.memonaut-pi;
@@ -272,7 +403,9 @@ lib.mkIf cfg.enable (
         defaultModel = lib.mkIf cfg.llm.enable (lib.mkDefault svc.llm.modelId);
       };
 
-      nixos-modules.anonSearch.enable = lib.mkDefault true;
+      # Off on the searchcast backend, where nothing would read its sockets
+      # (nixos-modules refuses the combination).
+      nixos-modules.anonSearch.enable = lib.mkDefault (!searchcast);
 
       nixos-modules.whereverAnon = {
         enable = lib.mkDefault true;

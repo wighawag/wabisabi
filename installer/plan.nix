@@ -226,6 +226,36 @@
         { option = "system:llm.enable"; }
         { option = "system:agents.enable"; }
         { option = "system:search.enable"; }
+        # The backend, then the recipe set it is for, then that set's chain:
+        # each asked only when the answer before makes it mean something.
+        # `onlyIf` takes one condition or a list (all must hold), each with
+        # `equals` or `notEquals`; an unasked question's answer is "", so
+        # the engines question also stays away when the backend is searxng.
+        { option = "system:search.backend"; }
+        {
+          # A nullOr-submodule option is asked field by field, in this order;
+          # every field after the first is asked only when the first was
+          # answered. Leaving the URL empty leaves the option null.
+          option = "system:search.recipes";
+          fields = [
+            "url"
+            "sha256"
+          ];
+          onlyIf = {
+            key = "system:search.backend";
+            notEquals = "searxng";
+          };
+        }
+        {
+          option = "system:search.engines";
+          # Required once a set is given: the config refuses a set without a
+          # chain, so an empty answer here would be an install that fails.
+          required = true;
+          onlyIf = {
+            key = "system:search.recipes.url";
+            notEquals = "";
+          };
+        }
         { option = "system:search.viaTor"; }
         { option = "system:anon.enable"; }
         { option = "system:anon.autoEnroll"; }
@@ -277,6 +307,7 @@
     "system:restore.files" = "Not a question: it is read BY the restore mode, out of a config that already exists, and a fresh install has nothing encrypted to place.";
     "system:agents.guide" = "Follows from the agent being enabled: without it the local model refuses to look at the machine it runs on. It is a seeded file the owner can edit or delete, not a preference to decide before seeing it.";
     "system:agents.extraGuide" = "Free text for a particular machine's agent; nothing an installer can usefully ask for.";
+    "system:search.recipeSet" = "A path or flake input, which only exists in a config that someone is editing; the installer asks for the URL form instead (search.recipes).";
     "system:agents.searchFolder" = "A path, and the default (~/searches) is fine for everyone; it only names where search-bar sessions live.";
     "system:wallpaper" = "A path to an image, which a terminal installer cannot usefully show you; the default is the enso the whole theme was drawn from, and Noctalia's settings pick another one on the running desktop.";
     "home:theme" = "Follows system:theme, which is asked under Desktop: one machine, one palette, unless a home deliberately sets its own in configuration.nix.";

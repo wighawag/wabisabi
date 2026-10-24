@@ -404,9 +404,121 @@
       type = lib.types.bool;
       default = true;
       description = ''
-        Private web search: a local SearXNG (a metasearch engine querying many
-        engines at once, no account, no tracking profile) plus webveil, the
-        search-and-fetch tool agents use. Also usable from a shell: `webveil`.
+        Private web search: webveil, the search-and-fetch tool agents use, with
+        a search backend on this machine (see `search.backend`): a local
+        SearXNG by default, or webveil's own searchcast engines. No account, no
+        tracking profile. Also usable from a shell: `webveil`.
+      '';
+    };
+
+    search.backend = lib.mkOption {
+      type = lib.types.enum [
+        "auto"
+        "searxng"
+        "searchcast"
+      ];
+      default = "auto";
+      description = ''
+        Where web searches go: "searxng" (a local SearXNG asking many engines at once), "searchcast" (webveil asks the engines itself, from recipes, with a browser's network fingerprint, and no SearXNG runs at all), or "auto" (searchcast when you give a recipe set in `search.recipes`, else SearXNG).
+
+        One backend per machine, for the owner and the anon accounts alike.
+
+        SearXNG works well with no setup, but in practice many of its engines
+        refuse it (CAPTCHAs, rate limits), more so over Tor, so its answers
+        tend to come from whichever one engine still lets it through.
+        searchcast's requests look like a real browser's and get through where
+        SearXNG's do not, but it is only as good as its recipes: without a set
+        of your own it runs webveil's bundled public engines (Mwmbl,
+        Marginalia), which are weak alone (off-topic or empty answers to many
+        queries). Hence "auto".
+
+        Switching back is this option and a rebuild.
+      '';
+    };
+
+    search.recipes = lib.mkOption {
+      type = lib.types.nullOr (
+        lib.types.submodule {
+          options = {
+            url = lib.mkOption {
+              type = lib.types.str;
+              example = "https://example.org/releases/my-set-1.0.0.tar.gz";
+              description = ''
+                Where the recipe-set archive is downloaded from: a .tar.gz
+                holding *.mjs code recipes (and optionally a manifest.json),
+                at its root or under one top-level directory, the format
+                `searchcast install-recipes` takes.
+              '';
+            };
+            sha256 = lib.mkOption {
+              type = lib.types.strMatching "[0-9a-f]{64}|sha256-[A-Za-z0-9+/]{43}=";
+              description = ''
+                The archive's sha256, in hex as `sha256sum` prints it (the
+                value `searchcast install-recipes --sha256` takes), or as an
+                SRI hash. This is your trust decision: exactly these bytes and
+                no others are ever loaded.
+              '';
+            };
+          };
+        }
+      );
+      default = null;
+      example = lib.literalExpression ''
+        {
+          url = "https://example.org/releases/my-set-1.0.0.tar.gz";
+          sha256 = "<the archive's sha256, hex>";
+        }
+      '';
+      description = ''
+        A searchcast recipe set to search with (with `search.backend` "auto" this also switches the backend to searchcast). THE URL IS WRITTEN INTO YOUR CONFIG, so if you publish your config you publish where your recipes come from. And RECIPES ARE CODE that webveil runs with full Node access, as you and as each anon account: pin only a set you trust, since the sha256 is that trust decision. Leave empty for none.
+
+        The archive is fetched when the system is built, by Nix, from this
+        machine's own address (`search.viaTor` routes searches, not this
+        download), checked against the sha256, unpacked into the store, and
+        handed to webveil from there for the owner and for every anon account.
+        Only its code recipes (*.mjs, *.js) are loaded; declarative *.json
+        recipes in it are not.
+
+        Give its engine order in `search.engines` too (required with a set).
+        To use a set from a flake input or a local path instead of a URL, set
+        `search.recipeSet`.
+      '';
+    };
+
+    search.recipeSet = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      example = lib.literalExpression "inputs.my-recipes";
+      description = ''
+        An already unpacked recipe set (a directory holding the *.mjs code
+        recipes), used instead of `search.recipes` when set: a flake input, or
+        a path. Same trust rule: it is code webveil runs. It is copied into
+        the store, so a set kept in a private input stays out of a published
+        config.
+      '';
+    };
+
+    search.engines = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [
+        "engine-a"
+        "engine-b"
+        "mwmbl"
+      ];
+      description = ''
+        The searchcast engine chain: recipe names (usually the file names without .mjs), tried in order until one answers. REQUIRED with a recipe set; add "mwmbl" and "marginalia" for webveil's bundled engines as fallbacks.
+
+        searchcast stops at the first engine that answers, and "no results"
+        is an answer, so put first the engines you trust to answer well (over
+        Tor too, for the anon accounts) and the ones that sometimes answer
+        empty after them. That judgement belongs to whoever chose the set,
+        which is why there is no default order.
+
+        An engine's name is its recipe's `name`. "mwmbl" and "marginalia" name
+        webveil's bundled recipes and bring their files along (so a set must
+        not contain recipes of those names if they are listed here). With no
+        recipe set, leave it empty for webveil's own default chain.
       '';
     };
 
@@ -420,6 +532,14 @@
         OFF by default because it costs results: many engines challenge or
         refuse Tor exits. Your queries are still sent without cookies or an
         account either way; this decides only which address they come from.
+
+        With the searchcast backend, webveil itself is what talks to the
+        engines, so this sets the owner's webveil egress to Tor, and web_fetch
+        (which follows the same egress) goes through Tor as well. Typed
+        `webveil install-recipes` and `install-libcurl` commands then ask you to
+        choose their route (`--egress`, `--proxy` or `--direct`), which is
+        webveil's rule for a proxied egress. The anon accounts are forced
+        through Tor whatever this says.
       '';
     };
 
