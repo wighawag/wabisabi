@@ -823,6 +823,35 @@
                 && h.wayland.windowManager.niri.settings.binds."Mod+A".spawn == exec;
             }
             {
+              name = "with the local model off, the anon accounts follow it off and the machine evaluates";
+              ok =
+                let
+                  h = self.nixosConfigurations.demo.extendModules {
+                    modules = [ { wabisabi.llm.enable = false; } ];
+                  };
+                in
+                !h.config.wabisabi.anon.enable
+                && !(h.config.users.users ? anon)
+                && builtins.isString h.config.system.build.toplevel.drvPath;
+            }
+            {
+              name = "anon accounts forced on without the local model are refused, saying why";
+              ok =
+                let
+                  h = self.nixosConfigurations.demo.extendModules {
+                    modules = [
+                      {
+                        wabisabi.llm.enable = false;
+                        wabisabi.anon.enable = true;
+                      }
+                    ];
+                  };
+                in
+                lib.any (
+                  a: !a.assertion && lib.hasInfix "wabisabi.anon.enable is true but wabisabi.llm.enable is false" a.message
+                ) h.config.assertions;
+            }
+            {
               name = "enrolment never holds up the boot";
               ok = !(lib.elem "multi-user.target" (d.systemd.services.wabisabi-anon-enroll.wantedBy or [ ]));
             }
@@ -1128,6 +1157,10 @@
                 expect "searchcast with a URL: the same" \
                   "$(search '{"system:search.backend": "searchcast", "system:search.recipes.url": "https://example.invalid/set.tar.gz"}')" \
                   "system:search.enable system:search.backend system:search.recipes.url system:search.recipes.sha256 system:search.engines system:search.viaTor "
+                anon() { walk "$1" | grep -c '^system:anon\.' || true; }
+                expect "no local model: no anon questions" "$(anon '{"system:llm.enable": "false"}')" "0"
+                expect "the local model: both anon questions" "$(anon '{}')" "2"
+                expect "anon off: no enrolment question" "$(anon '{"system:anon.enable": "false"}')" "1"
                 expect "the LUKS passphrase still follows its layout" \
                   "$(walk '{"disk:layout": "plain"}' | grep -c '^disk:passphrase$' || true)" "0"
                 expect "the LUKS passphrase is asked for LUKS" \
