@@ -100,6 +100,7 @@ let
     ];
     text = ''
       export WABISABI_QUESTIONS=${questions}
+      export WABISABI_APPLIES=${./applies.jq}
       export WABISABI_TEMPLATE=${template}
       export WABISABI_EMIT=${./emit.sh}
       export WABISABI_LOCK=${targetLock}/flake.lock
