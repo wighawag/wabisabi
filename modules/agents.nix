@@ -36,6 +36,8 @@ let
   svc = config.nixos-modules;
   wp = config.nixos-modules.pkgs;
   hasUser = cfg.user != "";
+  # See the assertion where the anon accounts are set up.
+  anonOn = cfg.anon.enable && cfg.llm.enable;
 
   llmModels = [
     {
@@ -328,7 +330,29 @@ lib.mkIf cfg.enable (
     })
 
     # ── anonymous accounts ──
-    (lib.mkIf cfg.anon.enable {
+    # The anon accounts' agent runs on the local model and nothing else (no
+    # other model is reachable from inside the jail without an exemption), and
+    # nixos-modules' anon-home requires a model. Without the model the block
+    # below is not evaluated at all: its options would otherwise fail with
+    # "anonHome.defaultModel was accessed but has no value", which names
+    # neither cause nor fix. anon.enable follows llm.enable by default, so
+    # this only fires when someone set it true explicitly.
+    (lib.mkIf (cfg.anon.enable && !cfg.llm.enable) {
+      assertions = [
+        {
+          assertion = false;
+          message = ''
+            wabisabi.anon.enable is true but wabisabi.llm.enable is false. The anon
+            accounts' agent can only use the local model (the one model reachable
+            from inside their jail without an exemption), so they need it. Turn
+            wabisabi.llm.enable on, or leave wabisabi.anon.enable at its default,
+            which follows it.
+          '';
+        }
+      ];
+    })
+
+    (lib.mkIf anonOn {
       # The anon accounts' only way out, so they bring it: the same loopback
       # client wabisabi.tor.enable configures (nixpkgs' defaults: 127.0.0.1:9050,
       # per-destination circuit isolation), switched on even when that option
@@ -420,7 +444,7 @@ lib.mkIf cfg.enable (
       );
     })
 
-    (lib.mkIf (cfg.anon.enable && cfg.anon.autoEnroll) {
+    (lib.mkIf (anonOn && cfg.anon.autoEnroll) {
       systemd.services.wabisabi-anon-enroll = {
         description = "Enrol and prove the declared anon accounts (anonctl add / verify)";
         # NOT wanted by multi-user.target: `verify` waits on Tor, and a boot

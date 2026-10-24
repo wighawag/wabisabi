@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib, pkgs, config, ... }:
 
 {
   options.wabisabi = {
@@ -602,7 +602,8 @@
 
     anon.enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = config.wabisabi.llm.enable;
+      defaultText = lib.literalExpression "config.wabisabi.llm.enable";
       description = ''
         Anonymous accounts: separate logins (anon, anon-john, anon-jane) whose
         EVERY connection is forced through Tor by the kernel, fail-closed
@@ -625,6 +626,12 @@
         resolves hostnames (systemd-resolved, nscd not answering host lookups),
         because otherwise every name an anon account looks up would be
         resolved in the clear by the system resolver.
+
+        NEEDS THE LOCAL MODEL (`llm.enable`), and follows it by default: the
+        local model, over its socket, is the only model an anon account can
+        use without a hole in its jail, and their agent setup requires one.
+        Turning the model off therefore turns these off too, unless this is
+        set to true, which is refused with that explanation.
       '';
     };
 

@@ -257,8 +257,29 @@
           };
         }
         { option = "system:search.viaTor"; }
-        { option = "system:anon.enable"; }
-        { option = "system:anon.autoEnroll"; }
+        {
+          # Only with the local model: without it the accounts have no model
+          # to run on, and the option's default follows llm.enable, so an
+          # unasked question leaves them off.
+          option = "system:anon.enable";
+          onlyIf = {
+            key = "system:llm.enable";
+            equals = "true";
+          };
+        }
+        {
+          option = "system:anon.autoEnroll";
+          onlyIf = [
+            {
+              key = "system:llm.enable";
+              equals = "true";
+            }
+            {
+              key = "system:anon.enable";
+              equals = "true";
+            }
+          ];
+        }
       ];
     }
 
