@@ -80,6 +80,13 @@ Decisions, and why:
 - `searchcast-runs`: builds the fixture through fetchurl and the unpack, then runs the packaged `webveil search` with the owner's and an anon account's generated configs and gets the fixture's answer; and the unpack refuses nested, linked, hidden and non-recipe files.
 - `installer-question-flow`: which search questions are asked, in order, for each backend and with or without a URL, using the installer's own rule, that the chain is a required answer, and the existing LUKS condition.
 
+**Tested in a VM** (2026-10-24, the demo host, headless, switched live between configurations with `switch-to-configuration test`; a real recipe set passed in as `search.recipeSet` from a temporary copy, never committed; 16 searches and one Tor check in all, seconds apart):
+
+- SearXNG (the default): owner, relevant results in 2 to 14 s, with every engine but one reported unresponsive, as measured before; anon account, 2 weak results.
+- searchcast with the set: owner, relevant results in under 1 s; over Tor (`viaTor`), relevant results, and `web_fetch` of check.torproject.org reported `IsTor: true`; pi on the local model made one `web_search` call and got 10 relevant URLs. Anon accounts: 0 results with the first version's file-order chain (see the decision above); with an explicit chain, 9 and 10 relevant results in about 2 s, from two accounts.
+- searchcast with no set: owner, 10 off-topic results (the bundled chain is weak, as expected); anon account, an error (`set searchcast.engines`) until nixos-modules#3, then a result.
+- Every switch left no failed unit; on searchcast no SearXNG process, unit or anon-search socket existed; switching back to SearXNG brought them back and answered. The anon accounts' webveil wrote no state directory (in memory, as intended); the owner's did.
+
 ## Enrolment
 
 `wabisabi.anon.autoEnroll` runs `wabisabi-anon-enroll` from a timer (1 minute after boot, then every 15 minutes), never from `multi-user.target`, because `verify` waits on Tor and a boot must not. Per declared account it is idempotent and self-healing:
@@ -141,7 +148,7 @@ Between the two that do, Gemma wins on the cost an agent actually pays, which is
 - **Real hardware**, including how fast the default model answers on a laptop CPU. With the first default (Qwen3.5 4B) a cold tool-calling turn took about 28 s on this build machine (Zen 5, 8 threads) and about 1m40s in the VM (6 vCPUs); the VM runs above were all on that model. Gemma 4 E4B measured roughly twice as fast on this machine (see "Why this default model"), but no laptop and no VM run has used it yet. Most of a cold turn is processing pi's system prompt.
 - **An anon account's wherever interface in a browser.** The route answers 200 with the UI's HTML through Caddy and the socket; no browser session was driven through it, and no agent session was run inside it.
 - **The installer's interactive TUI** with the new group (only the unattended route was run). The search questions' order and conditions are checked through `applies.jq`; the gum prompts themselves, including the sha256 retry loop, were not driven.
-- **searchcast on a running machine.** The generated configs were run by `webveil search` in a build sandbox against the fixture, not on a booted host: not as the owner through pi-webveil, not inside an anon account's jail, and not through Tor. No search with a real recipe set was made from wabisabi.
+- **searchcast from an installed machine.** It was tested in the demo VM with a set given as a path (`search.recipeSet`); the URL route (`search.recipes`) was only run against the fixture's `file://` URL, and the installer's recipe questions only through the unattended route.
 
 ## Next
 
