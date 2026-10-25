@@ -262,6 +262,19 @@ sudo wabisabi-install --answers /mnt/usb/restore.json
 
 That stick now holds your age key in the clear (for a fleet, the admin key that opens every machine's secrets), so keep it on you and delete `restore.json` and the ssh key from it once the machine is back. The copy that lasts belongs in your password manager, not on a stick.
 
+Writing the ISO to a stick erases the whole stick, so the answers cannot share it with the ISO: use a second stick (or a Ventoy stick, which boots the ISO as a file and keeps its own data partition).
+
+**Before you wipe, a checklist.** A restore brings back what your config declares and nothing else: the system, the secrets, the password. Everything the old install accumulated by hand is on that disk only. Go through it while the machine still boots:
+
+- **Git work.** Every repo with unpushed commits, stashes or uncommitted files. A pushed branch is enough; a `git bundle` of the unpushed refs works for anything you will not push. Gitignored files (`.env` and friends) are not saved by pushing at all.
+- **Files outside anything that syncs.** Your home folders beyond the synced ones, `~/Downloads` and `~/Documents` above all, and loose files in `~` itself. Measure with `du -xsh ~/* ~/.[!.]* | sort -rh` and decide folder by folder; most of the size is usually caches and toolchains, which come back on their own.
+- **Things that exist only on this disk and cannot be recreated**: signing keys and keystores (an app signed with a lost key can never be updated), wallet or password databases kept locally, and identities that live on the device (Jami accounts, an IPFS node). Signal Desktop's history does not survive either; it relinks to your phone empty.
+- **Hand-installed software** you want back (`apt-mark showmanual`, Flatpaks, AppImages, `/usr/local/bin`, `~/.local/bin`): declare it in your config now, so the restored machine already has it.
+- **Synced folders are actually synced**: 100% on another device, not merely connected. During the reinstall that other device holds the only copy.
+- **Your age key** is somewhere other than this machine and this stick.
+
+Then, for the install itself: **disable Secure Boot** in the firmware (NixOS's systemd-boot is unsigned, so a machine that booted a distro through a signed shim will not boot it), use the **netinstall ISO** unless your config's lock still pins exactly what the offline ISO carries, prefer a wired or phone-tethered **network**, and stay on **mains power**: the install builds the whole system, and anything not in the binary cache (an unfree package, your own) compiles on the spot. If anything fails before partitioning, nothing was touched; after partitioning, the repo still has everything, so running it again is the fix.
+
 **The offline ISO is a live system.** It boots straight into the wabisabi desktop (user `nixos`, no password), so the machine can be tried before anything touches its disk: a welcome terminal says what to try and holds the install command. Everything runs from the stick and from RAM; the local model starts on first use rather than at boot, to spare that RAM. Its boot menu also has a **text installer only** entry, which is the plain installer with no desktop.
 
 niri refuses a software renderer, so a live desktop on a machine with no usable GPU would be a black screen with niri running behind it. The live session therefore waits for the GPU driver and, if there is still no render node, starts a text shell that says so and how to install instead. The netinstall ISO stays text-only and small.
