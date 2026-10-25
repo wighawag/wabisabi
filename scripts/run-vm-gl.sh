@@ -65,10 +65,13 @@ if ! "$HOSTQEMU" -device help 2>/dev/null | grep -q 'virtio-vga-gl'; then
   exit 1
 fi
 
-# Keep the disk image somewhere explicit and per-checkout, rather than
-# whatever the current directory happens to be.
-mkdir -p "$REPO/.vm"
-export NIX_DISK_IMAGE="$REPO/.vm/demo.qcow2"
+# Keep the disk image somewhere explicit, rather than whatever the current
+# directory happens to be, and OUTSIDE the checkout: anything under the repo
+# is copied into /nix/store whenever the tree is evaluated as a `path:` flake
+# (which ignores .gitignore). See scripts/test-install-vm.sh.
+VM_ROOT=${WABISABI_VM_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/wabisabi/vm}
+mkdir -p "$VM_ROOT"
+export NIX_DISK_IMAGE="$VM_ROOT/demo.qcow2"
 
 if [ "$KEEP" -eq 1 ]; then
   echo "==> reusing $NIX_DISK_IMAGE (--keep; home-manager activation will likely fail)"
@@ -84,8 +87,8 @@ fi
 # is how you override the display backend.
 sed "s|/nix/store/[a-z0-9]*-qemu[^/]*/bin/qemu-system-x86_64|$HOSTQEMU|g;
      s|/nix/store/[a-z0-9]*-qemu[^/]*/bin/qemu-img|$(command -v qemu-img || echo '/usr/bin/qemu-img')|g" \
-  "$RUNNER" > "$REPO/.vm/run-vm-gl.sh"
-chmod +x "$REPO/.vm/run-vm-gl.sh"
+  "$RUNNER" > "$VM_ROOT/run-vm-gl.sh"
+chmod +x "$VM_ROOT/run-vm-gl.sh"
 
 echo "==> log in as demo / demo; the mod key in the VM is Alt"
-exec env QEMU_OPTS="-m 4096 -smp 4 -enable-kvm ${QEMU_OPTS:-}" "$REPO/.vm/run-vm-gl.sh"
+exec env QEMU_OPTS="-m 4096 -smp 4 -enable-kvm ${QEMU_OPTS:-}" "$VM_ROOT/run-vm-gl.sh"

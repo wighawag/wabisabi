@@ -35,7 +35,12 @@
 set -euo pipefail
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-WORK="$REPO/.vm/install-test"
+# Disk images live OUTSIDE the checkout. Anything under the repo is copied
+# into /nix/store whenever the tree is evaluated as a `path:` flake (which
+# ignores .gitignore), and these qcow2s once cost ~85 GB per evaluation:
+# 13 such copies filled telemaque's 1.8 TB disk in two days (2026-10-25).
+VM_ROOT=${WABISABI_VM_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/wabisabi/vm}
+WORK="$VM_ROOT/install-test"
 VARIANT="plain"
 ISO_ATTR="iso-autotest"
 ONLY_STAGE=""
