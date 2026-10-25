@@ -1305,6 +1305,15 @@
                 truncate -s 40M small.img
                 if wabisabi-usb write small.img --iso fake.iso --yes; then fail "a too-small stick was accepted"; fi
 
+                # write --kit checks the kit's inputs BEFORE writing anything:
+                # a missing age key leaves the stick as it was.
+                truncate -s 200M untouched.img
+                if wabisabi-usb write untouched.img --iso fake.iso --kit --source x --host h \
+                     --age-key $TMPDIR/no-such-key --ssh-key none --passphrase-file pass --yes; then
+                  fail "write --kit accepted a missing age key"
+                fi
+                cmp -s -n $((16 * 1024 * 1024)) untouched.img /dev/zero || fail "write --kit wrote before checking the kit's inputs"
+
                 # A kit needs the data partition first.
                 if wabisabi-usb kit stick.img --source x --host h --age-key ${./installer/test-age-key.txt} \
                      --ssh-key none --passphrase-file pass --yes; then fail "kit without a data partition"; fi

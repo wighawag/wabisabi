@@ -212,6 +212,8 @@ do_write() {
   [ -z "$ISO" ] || [ -z "$RELEASE" ] || die "give --iso or --release, not both."
   need_root_for_device
   check_target
+  # Everything the kit needs, checked BEFORE the download and the write.
+  [ "$WITH_KIT" = 1 ] && kit_gather
   [ -n "$RELEASE" ] && fetch_release "$RELEASE"
   [ -r "$ISO" ] || die "cannot read '$ISO'."
 
@@ -231,7 +233,15 @@ do_write() {
     confirm_destruction "$TARGET"
   fi
 
-  dd if="$ISO" of="$TARGET" bs=4M conv=notrunc,fsync status=progress
+  # O_DIRECT on a device, so the progress dd prints is the STICK's progress.
+  # Without it dd fills the page cache in seconds, shows a finished count, and
+  # then sits silent in the final fsync for as long as the stick takes.
+  if is_file_target; then
+    dd if="$ISO" of="$TARGET" bs=4M conv=notrunc,fsync status=progress
+  else
+    note "Writing $((iso_bytes / 1048576)) MiB; the count below is what the stick has really taken."
+    dd if="$ISO" of="$TARGET" bs=4M iflag=fullblock oflag=direct conv=fsync status=progress
+  fi
   # The ISO's own partition table must end inside the ISO, or the new
   # partition would overlap something it carries.
   local last_end
@@ -247,7 +257,10 @@ do_write() {
   reread
 
   # Proof that the ISO is intact: every byte outside the partition table
-  # entries (MBR bytes 446..509) matches the ISO.
+  # entries (MBR bytes 446..509) matches the ISO. Read from the stick, not
+  # from the page cache.
+  is_file_target || blockdev --flushbufs "$TARGET" 2>/dev/null || true
+  note "Reading it back to verify (about as long as the write took)"
   if cmp -s -n 446 "$ISO" "$TARGET" && cmp -s -i 510 -n $((iso_bytes - 510)) "$ISO" "$TARGET"; then
     note "Verified: the ISO on $TARGET is byte-identical to $(basename "$ISO") outside the partition table."
   else
@@ -257,9 +270,11 @@ do_write() {
   bold "$TARGET boots the installer, with $(( (dev_bytes - start) / 1048576 )) MiB free after it for a restore kit."
 
   if [ "$WITH_KIT" = 1 ]; then
-    do_kit
+    heading "Writing the restore kit"
+    kit_apply
   elif [ "$ASSUME_YES" != 1 ] && gum confirm --default=false "Put a restore kit on it now (your config repo and keys, encrypted)?"; then
-    do_kit
+    kit_gather
+    kit_apply
   else
     note "A restore kit can be added later: wabisabi-usb kit $TARGET"
   fi
@@ -278,19 +293,13 @@ ask_text() {
   echo "$value"
 }
 
-do_kit() {
-  need_root_for_device
-  check_target
-  read_data_partition
-  local start="$DATA_START" size="$DATA_SIZE"
-  [ "$size" -ge $((KIT_IMAGE_MIB * 1048576)) ] || die "the data partition is smaller than the ${KIT_IMAGE_MIB} MiB a kit needs."
-
-  heading "A restore kit"
-  if kit_present; then
-    warn "$TARGET already holds a restore kit; it will be replaced."
-    if [ "$ASSUME_YES" != 1 ]; then gum confirm "Replace it?" || die "kept the existing kit."; fi
-  fi
-
+# Everything the kit holds, gathered and CHECKED before anything is written:
+# a missing key must stop `write --kit` before the stick is overwritten, not
+# after. Sets KIT_KEY and KIT_PASS.
+KIT_KEY="" KIT_PASS="" KIT_GATHERED=0
+kit_gather() {
+  [ "$KIT_GATHERED" = 0 ] || return 0
+  heading "What the restore kit will hold"
   local home interactive=1
   home=$(user_home)
   [ "$ASSUME_YES" = 1 ] && interactive=0
@@ -320,7 +329,7 @@ do_kit() {
 
   # The age key, read from a file and never typed.
   [ -n "$AGE_KEY" ] || AGE_KEY="$home/.config/sops/age/keys.txt"
-  [ -r "$AGE_KEY" ] || die "no age key at $AGE_KEY. Give --age-key FILE."
+  [ -r "$AGE_KEY" ] || die "no age key at $AGE_KEY. Give --age-key FILE (on a machine where the key is root-only, e.g. --age-key /root/.config/sops/age/keys.txt)."
   local key
   key=$(grep -m1 '^AGE-SECRET-KEY-1' "$AGE_KEY" || true)
   valid_age_key "$key" || die "$AGE_KEY holds no valid age secret key."
@@ -355,6 +364,17 @@ do_kit() {
     done
   fi
   [ -n "$pass" ] || die "the kit's passphrase is empty."
+  KIT_KEY="$key" KIT_PASS="$pass"
+  pass="" pass2=""
+  KIT_GATHERED=1
+  note "Repo $SOURCE, machine '$HOST', age key from $AGE_KEY$([ -n "$SSH_KEY" ] && echo ", ssh key $SSH_KEY")."
+}
+
+kit_apply() {
+  read_data_partition
+  local start="$DATA_START" size="$DATA_SIZE"
+  [ "$size" -ge $((KIT_IMAGE_MIB * 1048576)) ] || die "the data partition is smaller than the ${KIT_IMAGE_MIB} MiB a kit needs."
+  local key="$KIT_KEY" pass="$KIT_PASS"
 
   # Build the kit in tmpfs, encrypt it there, then write it: no mapping, no
   # mount, and the plaintext never reaches the stick.
@@ -372,7 +392,7 @@ do_kit() {
   printf '%s' "$pass" | cryptsetup reencrypt --encrypt --type luks2 --reduce-device-size 16M \
     --label "$KIT_LABEL" --key-file - -q --disable-locks "$WORK/kit.img" >/dev/null \
     || die "could not encrypt the kit."
-  pass="" pass2=""
+  pass="" KIT_PASS=""
   [ "$(blkid -p -o value -s LABEL "$WORK/kit.img")" = "$KIT_LABEL" ] || die "the encrypted kit has no $KIT_LABEL label."
 
   clear_data_start "$start" 32
@@ -385,6 +405,19 @@ do_kit() {
   bold "The restore kit is on $TARGET."
   note "It holds: $SOURCE, machine '$HOST'$([ -n "$REPO_PATH" ] && echo ", into $REPO_PATH"), your age key$([ -n "$SSH_KEY" ] && echo " and $(basename "$SSH_KEY")")."
   note "Boot from the stick and run: sudo wabisabi-install. It finds the kit, asks its passphrase, and offers to erase it once the machine is back."
+}
+
+do_kit() {
+  need_root_for_device
+  check_target
+  read_data_partition
+  heading "A restore kit on $TARGET"
+  if kit_present; then
+    warn "$TARGET already holds a restore kit; it will be replaced."
+    if [ "$ASSUME_YES" != 1 ]; then gum confirm "Replace it?" || die "kept the existing kit."; fi
+  fi
+  kit_gather
+  kit_apply
 }
 
 # ── wipe and show ─────────────────────────────────────────────────────────
