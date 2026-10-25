@@ -9,13 +9,14 @@
 #   wabisabi-usb wipe DEVICE                      erase the restore kit
 #   wabisabi-usb show DEVICE                      what is on it
 #
-# THE LAYOUT. `write` copies the ISO to the stick byte for byte, then adds one
-# partition in the space after it. The ISO itself is not changed, apart from
-# the one partition-table entry that names the new partition, so the stick
-# boots exactly as the ISO does.
+# THE LAYOUT. `write` copies the ISO to the stick byte for byte and changes
+# NOTHING else: no partition is added, because an entry added to an
+# isohybrid ISO's partition table made a ThinkPad refuse to boot the stick.
+# The stick boots exactly as the ISO does.
 #
-# THE RESTORE KIT is that partition, encrypted (LUKS2, labelled
-# WABISABI-DATA) with a passphrase you choose, holding the answers a restore
+# THE RESTORE KIT lives in the free space after the ISO, at the first MiB
+# boundary past its end (installer/disks.sh, kit_scan). It is a LUKS2
+# container labelled WABISABI-DATA, encrypted with a passphrase you choose, holding the answers a restore
 # needs and the keys it uses: your config repo, which machine in it, your age
 # key and (for a private repo) an ssh key. Booted from the stick,
 # `sudo wabisabi-install` finds it, asks for the passphrase and restores with
@@ -44,12 +45,11 @@ set -euo pipefail
 
 : "${WABISABI_DISKS_LIB:?internal: disks.sh path not baked in}"
 DOWNLOADS="${WABISABI_DOWNLOADS:-https://downloads.wabisabi.computer}"
-KIT_LABEL=WABISABI-DATA
 # The kit's container: small, because it holds a few small files. The LUKS2
 # header takes 16 MiB of it.
 KIT_IMAGE_MIB=64
 KIT_FS_MIB=40
-# Space the data partition must have at least.
+# Free space the stick must have after the ISO.
 MIN_DATA_MIB=$((KIT_IMAGE_MIB + 16))
 
 bold() { gum style --bold -- "$*"; }
@@ -71,6 +71,7 @@ TARGET="${1:-}"
 [ -n "$TARGET" ] || die "which device? (wabisabi-usb $cmd /dev/sdX; lsblk lists them)"
 shift
 
+WRITE_START=""
 ISO="" RELEASE="" VERSION="" WITH_KIT=0 ANY_DISK=0 ASSUME_YES=0
 SOURCE="" HOST="" REPO_PATH="" AGE_KEY="" SSH_KEY="" PASSFILE=""
 while [ $# -gt 0 ]; do
@@ -131,46 +132,26 @@ check_target() {
   fi
 }
 
-# The data partition: the one wabisabi-usb added, after the ISO. Prints
-# "<start-byte> <size-bytes>".
-data_partition() {
-  local json
-  json=$(sfdisk -J "$TARGET" 2>/dev/null) || die "$TARGET has no partition table. Was it written with wabisabi-usb write?"
-  jq -r --arg t "$TARGET" '
-    .partitiontable as $pt
-    | ($pt.sectorsize // 512) as $ss
-    | [$pt.partitions[] | select(.type == "83")] | sort_by(.start) | last
-    | if . == null then empty else "\(.start * $ss) \(.size * $ss)" end' <<<"$json"
+# The kit's place on the stick: the first MiB boundary after the ISO, where
+# kit_scan looks. Sets DATA_START and DATA_SIZE (bytes), or dies. Not a $(...)
+# helper: a die inside a command substitution only ends the subshell.
+read_data_region() {
+  local end found
+  end=$(image_end_bytes "$TARGET")
+  [ "$end" -gt 0 ] || die "$TARGET does not hold an installer ISO. Write it first: wabisabi-usb write $TARGET --iso ..."
+  # An existing kit decides the offset (a writer may have started it further
+  # on); otherwise the first MiB boundary after the image.
+  if found=$(kit_scan "$TARGET"); then DATA_START=$found; else DATA_START=$(mib_ceil "$end"); fi
+  DATA_SIZE=$(( $(size_of "$TARGET") - DATA_START ))
 }
 
-# Sets DATA_START and DATA_SIZE (bytes), or dies. Not a $(...) helper: a die
-# inside a command substitution only ends the subshell.
-read_data_partition() {
-  local p
-  p=$(data_partition)
-  [ -n "$p" ] || die "$TARGET has no data partition. Write the stick with: wabisabi-usb write $TARGET --iso ..."
-  read -r DATA_START DATA_SIZE <<<"$p"
-}
+kit_present() { kit_scan "$TARGET" >/dev/null; }
 
-kit_present() {
-  local start
-  read -r start _ <<<"$(data_partition)"
-  [ -n "$start" ] || return 1
-  [ "$(blkid -p -O "$start" -o value -s LABEL "$TARGET" 2>/dev/null || true)" = "$KIT_LABEL" ]
-}
-
-# Zero the first bytes of the data partition: an old kit's header, or any
-# other signature, must not survive a rewrite.
+# Zero the start of the kit's place: an old kit's header, or any other
+# signature, must not survive a rewrite.
 clear_data_start() {
   local start="$1" mib="${2:-32}"
   dd if=/dev/zero of="$TARGET" bs=1M count="$mib" seek="$start" oflag=seek_bytes conv=notrunc,fsync status=none
-}
-
-reread() {
-  if ! is_file_target; then
-    blockdev --rereadpt "$TARGET" 2>/dev/null || partx -u "$TARGET" 2>/dev/null || true
-    udevadm settle 2>/dev/null || true
-  fi
 }
 
 # ── write ─────────────────────────────────────────────────────────────────
@@ -221,9 +202,16 @@ do_write() {
   iso_bytes=$(size_of "$ISO")
   dev_bytes=$(size_of "$TARGET")
   # The data partition starts on the first MiB boundary after the ISO.
-  start=$(( (iso_bytes + 1048575) / 1048576 * 1048576 ))
+  # The kit's place: the first MiB boundary after the ISO, whichever is
+  # further of its file size and the image it declares (they are equal for
+  # wabisabi's ISOs).
+  local declared
+  declared=$(image_end_bytes "$ISO")
+  [ "$declared" -gt 0 ] || die "'$ISO' does not look like an isohybrid installer image (no ISO 9660, MBR or GPT)."
+  start=$(mib_ceil "$iso_bytes")
+  [ "$(mib_ceil "$declared")" -le "$start" ] || start=$(mib_ceil "$declared")
   if [ $((dev_bytes - start)) -lt $((MIN_DATA_MIB * 1048576)) ]; then
-    die "$TARGET ($((dev_bytes / 1048576)) MiB) is too small for this ISO ($((iso_bytes / 1048576)) MiB) plus a ${MIN_DATA_MIB} MiB data partition."
+    die "$TARGET ($((dev_bytes / 1048576)) MiB) is too small for this ISO ($((iso_bytes / 1048576)) MiB) plus ${MIN_DATA_MIB} MiB for a restore kit."
   fi
 
   heading "Writing $(basename "$ISO") to $TARGET"
@@ -242,30 +230,21 @@ do_write() {
     note "Writing $((iso_bytes / 1048576)) MiB; the count below is what the stick has really taken."
     dd if="$ISO" of="$TARGET" bs=4M iflag=fullblock oflag=direct conv=fsync status=progress
   fi
-  # The ISO's own partition table must end inside the ISO, or the new
-  # partition would overlap something it carries.
-  local last_end
-  last_end=$(sfdisk -J "$TARGET" 2>/dev/null | jq '[.partitiontable.partitions[]? | .start + .size] | max // 0')
-  [ $((last_end * 512)) -le "$start" ] || die "the ISO's partition table reaches past its own end; refusing to add a partition to it."
-
-  # Cleared BEFORE the partition is added: an earlier kit at the same place
-  # would otherwise survive the rewrite (and make sfdisk stop to ask).
+  # Nothing is added to the partition tables (see THE LAYOUT): only the
+  # start of the free space is cleared, so no earlier kit survives a rewrite.
   clear_data_start "$start"
-  echo "start=$((start / 512)), type=83" | sfdisk --quiet --append --no-reread --no-tell-kernel "$TARGET" >/dev/null \
-    || die "could not add the data partition."
   sync
-  reread
 
-  # Proof that the ISO is intact: every byte outside the partition table
-  # entries (MBR bytes 446..509) matches the ISO. Read from the stick, not
-  # from the page cache.
+  # Proof that the stick IS the ISO, byte for byte, read from the stick and
+  # not from the page cache.
   is_file_target || blockdev --flushbufs "$TARGET" 2>/dev/null || true
   note "Reading it back to verify (about as long as the write took)"
-  if cmp -s -n 446 "$ISO" "$TARGET" && cmp -s -i 510 -n $((iso_bytes - 510)) "$ISO" "$TARGET"; then
-    note "Verified: the ISO on $TARGET is byte-identical to $(basename "$ISO") outside the partition table."
+  if cmp -s -n "$iso_bytes" "$ISO" "$TARGET"; then
+    note "Verified: $TARGET holds $(basename "$ISO") byte for byte."
   else
     die "the stick does not read back as the ISO. Try another stick, or write again."
   fi
+  WRITE_START=$start
   echo "WABISABI_USB_WRITTEN target=$TARGET data_start=$start"
   bold "$TARGET boots the installer, with $(( (dev_bytes - start) / 1048576 )) MiB free after it for a restore kit."
 
@@ -371,9 +350,11 @@ kit_gather() {
 }
 
 kit_apply() {
-  read_data_partition
+  read_data_region
+  # In the same run as `write`, exactly where write left the space.
+  [ -z "$WRITE_START" ] || DATA_START=$WRITE_START DATA_SIZE=$(( $(size_of "$TARGET") - WRITE_START ))
   local start="$DATA_START" size="$DATA_SIZE"
-  [ "$size" -ge $((KIT_IMAGE_MIB * 1048576)) ] || die "the data partition is smaller than the ${KIT_IMAGE_MIB} MiB a kit needs."
+  [ "$size" -ge $((KIT_IMAGE_MIB * 1048576)) ] || die "there are fewer than the ${KIT_IMAGE_MIB} MiB a kit needs after the ISO on $TARGET."
   local key="$KIT_KEY" pass="$KIT_PASS"
 
   # Build the kit in tmpfs, encrypt it there, then write it: no mapping, no
@@ -398,7 +379,6 @@ kit_apply() {
   clear_data_start "$start" 32
   dd if="$WORK/kit.img" of="$TARGET" bs=1M seek="$start" oflag=seek_bytes conv=notrunc,fsync status=none
   sync
-  reread
   kit_present || die "the kit did not read back from $TARGET."
 
   echo "WABISABI_USB_KIT target=$TARGET host=$HOST"
@@ -410,7 +390,7 @@ kit_apply() {
 do_kit() {
   need_root_for_device
   check_target
-  read_data_partition
+  read_data_region
   heading "A restore kit on $TARGET"
   if kit_present; then
     warn "$TARGET already holds a restore kit; it will be replaced."
@@ -424,9 +404,8 @@ do_kit() {
 
 do_wipe() {
   need_root_for_device
-  read_data_partition
-  local start="$DATA_START"
-  if ! kit_present; then
+  local start
+  if ! start=$(kit_scan "$TARGET"); then
     note "No restore kit on $TARGET."
     return 0
   fi
@@ -435,7 +414,6 @@ do_wipe() {
   fi
   clear_data_start "$start" 32
   sync
-  reread
   if kit_present; then die "the kit is still readable on $TARGET."; fi
   echo "WABISABI_USB_WIPED target=$TARGET"
   bold "The restore kit on $TARGET is erased."
@@ -444,16 +422,18 @@ do_wipe() {
 
 do_show() {
   if ! is_file_target; then lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL "$TARGET" || true; fi
-  local p
-  p=$(data_partition)
-  if [ -z "$p" ]; then
-    note "No data partition: not written with wabisabi-usb."
+  local end off
+  end=$(image_end_bytes "$TARGET")
+  if [ "$end" = 0 ]; then
+    note "No installer ISO on it."
     return 0
   fi
-  local start size
-  read -r start size <<<"$p"
-  note "Data partition: $((size / 1048576)) MiB at $((start / 1048576)) MiB."
-  if kit_present; then bold "A restore kit is on it."; else note "No restore kit on it."; fi
+  note "An installer image of $((end / 1048576)) MiB, then $(( ($(size_of "$TARGET") - end) / 1048576 )) MiB free."
+  if off=$(kit_scan "$TARGET"); then
+    bold "A restore kit is on it, at $((off / 1048576)) MiB."
+  else
+    note "No restore kit on it."
+  fi
 }
 
 case "$cmd" in

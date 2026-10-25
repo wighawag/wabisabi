@@ -60,3 +60,58 @@ confirm_destruction() {
   typed=$(gum input --placeholder "$(basename "$device")")
   [ "$typed" = "$(basename "$device")" ] || die "not confirmed; no disk was touched."
 }
+
+# ── where a restore kit lives on an installer stick ──────────────────────
+#
+# A kit is NOT a partition. Adding an entry to an isohybrid ISO's partition
+# table made a ThinkPad's firmware refuse to boot the stick (2026-10-25: the
+# ISO carries an MBR AND a GPT, and an MBR entry the GPT does not know about
+# was enough), so the stick stays byte-identical to the ISO and the kit sits
+# in the free space after it: a LUKS2 container labelled WABISABI-DATA, at
+# the first MiB boundary at or after the image's end. Both tools find it the
+# same way, by reading that space.
+
+KIT_LABEL=WABISABI-DATA
+
+# The end of the isohybrid image on $1 (a disk or an image file), in bytes:
+# the furthest of its MBR partitions (but type 83, the kit partition of the
+# first wabisabi-usb), its GPT backup header, and its ISO 9660 volume. 0 when
+# none of them is there, i.e. not an installer image.
+image_end_bytes() {
+  local dev="$1" end=0 e alt vol bs
+  e=$(sfdisk -J "$dev" 2>/dev/null \
+    | jq '[.partitiontable.partitions[]? | select(.type != "83") | .start + .size] | max // 0' 2>/dev/null || echo 0)
+  [ "${e:-0}" -gt "$end" ] && end=$e
+  if [ "$(dd if="$dev" bs=512 skip=1 count=1 status=none 2>/dev/null | head -c 8)" = "EFI PART" ]; then
+    alt=$(dd if="$dev" bs=1 skip=$((512 + 32)) count=8 status=none 2>/dev/null | od -An -tu8 | tr -d ' ')
+    [ $((alt + 1)) -gt "$end" ] && end=$((alt + 1))
+  fi
+  if [ "$(dd if="$dev" bs=1 skip=$((32768 + 1)) count=5 status=none 2>/dev/null)" = CD001 ]; then
+    vol=$(dd if="$dev" bs=1 skip=$((32768 + 80)) count=4 status=none | od -An -tu4 | tr -d ' ')
+    bs=$(dd if="$dev" bs=1 skip=$((32768 + 128)) count=2 status=none | od -An -tu2 | tr -d ' ')
+    e=$((vol * bs / 512))
+    [ "$e" -gt "$end" ] && end=$e
+  fi
+  echo $((end * 512))
+}
+
+mib_ceil() { echo $(( ($1 + 1048575) / 1048576 * 1048576 )); }
+
+# Prints the byte offset of the kit on $1, or fails. It scans 128 MiB from
+# the image's end, so a writer that started a little further on (it rounds
+# up from the ISO FILE's size, which may exceed what the image declares)
+# is still found.
+kit_scan() {
+  local dev="$1" end off i
+  end=$(image_end_bytes "$dev")
+  [ "$end" -gt 0 ] || return 1
+  off=$(mib_ceil "$end")
+  for ((i = 0; i < 128; i++)); do
+    if [ "$(blkid -p -O "$off" -o value -s LABEL "$dev" 2>/dev/null || true)" = "$KIT_LABEL" ]; then
+      echo "$off"
+      return 0
+    fi
+    off=$((off + 1048576))
+  done
+  return 1
+}

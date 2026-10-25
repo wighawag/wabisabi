@@ -18,7 +18,8 @@
 # installer's own USB stick holding the restore answers and keys. Without
 # --answers, the installer looks for one and offers to restore from it.
 #
-#   --kit DEV|auto              use the kit on DEV (auto: find it by label)
+#   --kit DEV|auto              use the kit on the stick DEV (auto: look on the
+#                               boot stick, then on any USB disk)
 #   --no-kit                    do not look for one
 #   --kit-passphrase-file FILE  its passphrase, for an unattended run
 #   --wipe-kit                  erase the kit after a successful install
@@ -97,6 +98,7 @@ on_exit() {
   local code=$?
   if mountpoint -q "$KIT_MNT" 2>/dev/null; then umount "$KIT_MNT" || true; fi
   if [ -e "/dev/mapper/$KIT_MAPPER" ]; then cryptsetup close "$KIT_MAPPER" || true; fi
+  if [ -n "${KIT_LOOP:-}" ]; then losetup -d "$KIT_LOOP" 2>/dev/null || true; fi
   # The work directory holds the LUKS passphrase while disko formats. Remove
   # it on every exit path, successful or not.
   rm -rf "$WORK"
@@ -685,22 +687,34 @@ EOF
 
 # ── restore kit: the answers and keys, from the installer's own stick ─────
 
-# `wabisabi-usb kit` writes a LUKS2 container labelled WABISABI-DATA into a
-# partition after the ISO on the same stick. Inside: restore.json (the
-# non-secret restore answers), age.key, and optionally ssh-key. Nothing here
-# trusts the stick beyond what an --answers file would be trusted with.
-KIT_LABEL=WABISABI-DATA
-KIT_DEVICE=""
+# `wabisabi-usb kit` writes a LUKS2 container labelled WABISABI-DATA into the
+# free space after the ISO on the same stick, NOT into a partition (see
+# installer/disks.sh: kit_scan). Inside: restore.json (the non-secret restore
+# answers), age.key, and optionally ssh-key. Nothing here trusts the stick
+# beyond what an --answers file would be trusted with.
+KIT_DEVICE="" KIT_OFFSET="" KIT_LOOP=""
 
+# The disk holding a kit, looked for on the stick this installer booted
+# from first, then on any other removable or USB disk.
 find_kit() {
-  # -c /dev/null: probe the devices now rather than trust a cache.
-  blkid -c /dev/null -o device -t LABEL="$KIT_LABEL" 2>/dev/null | head -1
+  local live d
+  live=$(live_disk || true)
+  for d in ${live:+/dev/$live} $(lsblk -dpno NAME,RM,TRAN | awk '$2 == 1 || $3 == "usb" {print $1}'); do
+    if kit_scan "$d" >/dev/null 2>&1; then
+      echo "$d"
+      return 0
+    fi
+  done
 }
 
 load_kit() {
   local dev="$1" pass tries=0 n
   [ -b "$dev" ] || die "restore kit '$dev' is not a block device."
   [ "$(id -u)" = 0 ] || die "opening a restore kit needs root. Try: sudo wabisabi-install"
+  KIT_OFFSET=$(kit_scan "$dev") || die "no restore kit on $dev (it is looked for in the space after the ISO)."
+  # A read-only loop device over the kit, from its offset to the end of the
+  # disk: the stick's own partition table is the ISO's and knows nothing of it.
+  KIT_LOOP=$(losetup -f --show -r -o "$KIT_OFFSET" "$dev") || die "could not reach the restore kit on $dev."
 
   heading "Restore kit on $dev"
   # The passphrase never touches anything but a pipe. Traced by nothing.
@@ -712,7 +726,7 @@ load_kit() {
     else
       pass=$(gum input --password --placeholder "the kit's passphrase")
     fi
-    if printf '%s' "$pass" | cryptsetup open --readonly --key-file - "$dev" "$KIT_MAPPER" 2>/dev/null; then
+    if printf '%s' "$pass" | cryptsetup open --readonly --key-file - "$KIT_LOOP" "$KIT_MAPPER" 2>/dev/null; then
       break
     fi
     tries=$((tries + 1))
@@ -735,6 +749,8 @@ load_kit() {
   done
   umount "$KIT_MNT"
   cryptsetup close "$KIT_MAPPER"
+  losetup -d "$KIT_LOOP"
+  KIT_LOOP=""
 
   [ -f "$WORK/kit/restore.json" ] || die "the restore kit has no restore.json. Nothing was touched."
   jq -e 'type == "object"' "$WORK/kit/restore.json" >/dev/null || die "the restore kit's restore.json is not a JSON object."
@@ -773,14 +789,13 @@ load_kit() {
 # write, which is why the kit was encrypted in the first place.
 wipe_kit() {
   local dev="$1"
-  cryptsetup erase -q "$dev" >/dev/null 2>&1 || true
-  dd if=/dev/zero of="$dev" bs=1M count=32 conv=fsync status=none 2>/dev/null || true
-  wipefs -a -q "$dev" 2>/dev/null || true
-  if [ -n "$(blkid -c /dev/null -p -o value -s TYPE "$dev" 2>/dev/null)" ]; then
-    warn "Could not erase the restore kit on $dev. Wipe the stick yourself: it holds your keys."
+  dd if=/dev/zero of="$dev" bs=1M count=32 seek="$KIT_OFFSET" oflag=seek_bytes conv=notrunc,fsync status=none 2>/dev/null || true
+  sync
+  if kit_scan "$dev" >/dev/null 2>&1; then
+    warn "Could not erase the restore kit on $dev. Wipe it yourself (wabisabi-usb wipe $dev): it holds your keys."
     return 1
   fi
-  echo "WABISABI_KIT_WIPED device=$dev"
+  echo "WABISABI_KIT_WIPED device=$dev offset=$KIT_OFFSET"
   note "The restore kit on $dev is erased."
 }
 
@@ -791,7 +806,7 @@ if [ -n "$KIT_ARG" ] && [ "$KIT_ARG" != none ]; then
   [ -z "$ANSWERS_IN" ] || die "--kit and --answers are two sources of answers; give one."
   if [ "$KIT_ARG" = auto ]; then
     KIT_ARG=$(find_kit)
-    [ -n "$KIT_ARG" ] || die "--kit auto: no restore kit (a partition labelled $KIT_LABEL) found."
+    [ -n "$KIT_ARG" ] || die "--kit auto: no restore kit found after the ISO on the boot stick, or on any other USB disk."
   fi
   load_kit "$KIT_ARG"
 elif [ -z "$KIT_ARG" ] && [ -z "$ANSWERS_IN" ] && [ -z "$OUT_ONLY" ] && [ "$(id -u)" = 0 ]; then

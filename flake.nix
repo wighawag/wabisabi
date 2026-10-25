@@ -1296,7 +1296,8 @@
                 fail() { echo "FAIL: $*" >&2; exit 1; }
 
                 head -c $((16 * 1024 * 1024)) /dev/urandom > fake.iso
-                echo "start=2048, size=8192, type=ef" | sfdisk --quiet fake.iso
+                # An MBR partition reaching the end, as an isohybrid image's does.
+                echo "start=2048, size=30720, type=ef" | sfdisk --quiet fake.iso
                 truncate -s 200M stick.img
                 cp ${testKitPassphrase} pass
                 printf wrong > wrong
@@ -1314,15 +1315,16 @@
                 fi
                 cmp -s -n $((16 * 1024 * 1024)) untouched.img /dev/zero || fail "write --kit wrote before checking the kit's inputs"
 
-                # A kit needs the data partition first.
+                # A kit needs an installer image first.
                 if wabisabi-usb kit stick.img --source x --host h --age-key ${./installer/test-age-key.txt} \
-                     --ssh-key none --passphrase-file pass --yes; then fail "kit without a data partition"; fi
+                     --ssh-key none --passphrase-file pass --yes; then fail "kit without an installer image"; fi
 
                 wabisabi-usb write stick.img --iso fake.iso --yes > write.log; cat write.log
                 grep -q WABISABI_USB_WRITTEN write.log || fail "no write sentinel"
-                start=$(sfdisk -J stick.img | jq '.partitiontable.partitions[] | select(.type == "83") | .start')
-                [ "$start" = 32768 ] || fail "data partition at sector $start, expected 32768 (the first MiB after 16 MiB)"
-                cmp -s -i 510 -n $((16 * 1024 * 1024 - 510)) fake.iso stick.img || fail "the ISO was changed"
+                # THE PARTITION TABLE IS THE ISO'S, untouched: a ThinkPad refused
+                # to boot a stick whose MBR had gained an entry.
+                cmp -s -n $((16 * 1024 * 1024)) fake.iso stick.img || fail "the stick is not the ISO byte for byte"
+                [ "$(sfdisk -J stick.img | jq '.partitiontable.partitions | length')" = 1 ] || fail "a partition was added"
 
                 wabisabi-usb kit stick.img --source https://example.org/fleet.git --host laptop \
                   --repo-path /home/tester/src/fleet --age-key ${./installer/test-age-key.txt} \
@@ -1330,8 +1332,10 @@
                 grep -q WABISABI_USB_KIT kit.log || fail "no kit sentinel"
                 wabisabi-usb show stick.img > show.log; grep -q "A restore kit is on it" show.log || fail "show does not see the kit"
 
+                cmp -s -n $((16 * 1024 * 1024)) fake.iso stick.img || fail "the kit touched the ISO"
+                [ "$(sfdisk -J stick.img | jq '.partitiontable.partitions | length')" = 1 ] || fail "the kit added a partition"
                 dd if=stick.img of=kit.img bs=1M skip=16 count=64 status=none
-                [ "$(blkid -p -o value -s LABEL kit.img)" = WABISABI-DATA ] || fail "kit not labelled WABISABI-DATA"
+                [ "$(blkid -p -o value -s LABEL kit.img)" = WABISABI-DATA ] || fail "kit not at 16 MiB, or not labelled WABISABI-DATA"
                 cryptsetup open --test-passphrase --disable-locks --key-file pass kit.img || fail "the passphrase does not open the kit"
                 if cryptsetup open --test-passphrase --disable-locks --key-file wrong kit.img 2>/dev/null; then fail "a wrong passphrase opens the kit"; fi
 
