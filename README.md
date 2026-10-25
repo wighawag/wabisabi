@@ -242,8 +242,11 @@ On the offline ISO a restore works with no network only if the repo's `flake.loc
 
 ```sh
 lsblk                                                              # find the stick, e.g. /dev/sdb
-sudo nix run github:wighawag/wabisabi#usb -- write /dev/sdb --release netinstall --kit
+nix build github:wighawag/wabisabi#usb -o /tmp/wabisabi-usb                  # as you, not root
+sudo /tmp/wabisabi-usb/bin/wabisabi-usb write /dev/sdb --release netinstall --kit
 ```
+
+(Built as yourself and run with sudo, because root on another distribution often has no flakes enabled; on a wabisabi machine `sudo nix run github:wighawag/wabisabi#usb -- write ...` does the same in one line.)
 
 `write` downloads the newest ISO (or takes yours, `--iso FILE`), checks it against its published SHA-256, writes it, and adds a partition in the space after it. `--kit` then puts a **restore kit** there: it asks for the repo (offering the one you run it from), which machine in it, where the repo goes, and a passphrase, and takes your age key from `~/.config/sops/age/keys.txt` and, for a repo fetched over ssh, your `~/.ssh/id_ed25519` (`--age-key`, `--ssh-key FILE|none` to choose others). Keys are read from files, never typed. The kit is encrypted (LUKS2, argon2id) with that passphrase, so a lost stick gives nothing away without it.
 
