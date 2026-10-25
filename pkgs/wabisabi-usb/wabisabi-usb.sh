@@ -231,8 +231,12 @@ do_write() {
     dd if="$ISO" of="$TARGET" bs=4M iflag=fullblock oflag=direct conv=fsync status=progress
   fi
   # Nothing is added to the partition tables (see THE LAYOUT): only the
-  # start of the free space is cleared, so no earlier kit survives a rewrite.
-  clear_data_start "$start"
+  # free space the installer searches (kit_scan: 128 MiB from the image's
+  # end) is cleared, so no earlier kit survives a rewrite, even one an older
+  # ISO of another size left at another offset.
+  local wipe_mib=$((128 + 32))
+  [ $((dev_bytes - start)) -ge $((wipe_mib * 1048576)) ] || wipe_mib=$(( (dev_bytes - start) / 1048576 ))
+  clear_data_start "$start" "$wipe_mib"
   sync
 
   # Proof that the stick IS the ISO, byte for byte, read from the stick and
