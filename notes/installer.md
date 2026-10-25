@@ -116,9 +116,9 @@ Be precise about the last step of each of those, because the automated assertion
 | Medium | Size | Needs |
 |---|---|---|
 | `iso-netinstall` | 1.5G | a network |
-| `iso-offline` | 8.5G, about 12G with the tool groups (estimated) | nothing (the local model's 4.2 GB included) |
+| `iso-offline` | 10.7G (v0.5.0, with the tool groups) | nothing (the local model's 4.2 GB included) |
 
-The tool groups (reading, creative, torrent, scanning, dev, virtualisation, flatpak; added 2026-10-25) are bools, and every bool is switched on in some payload, so the offline image carries them all whatever their defaults. Measured from cache.nixos.org against the 9.2 GB image built before them, they add about 6.8 GB uncompressed: creative 3.7 GB (2.1 GB of it OBS's embedded browser, kept on purpose), dev 2.1 GB (clang 850 MB, Zed 430 MB), virtualisation 650 MB, the rest under 350 MB each. Not yet rebuilt: replace the estimate with the real size at the next release.
+The tool groups (reading, creative, torrent, scanning, dev, virtualisation, flatpak; added 2026-10-25) are bools, and every bool is switched on in some payload, so the offline image carries them all whatever their defaults. Measured from cache.nixos.org against the 9.2 GB image built before them, they add about 6.8 GB uncompressed: creative 3.7 GB (2.1 GB of it OBS's embedded browser, kept on purpose), dev 2.1 GB (clang 850 MB, Zed 430 MB), virtualisation 650 MB, the rest under 350 MB each. The estimate was about 12 GB; v0.5.0 came out at 10.7 GB (10,686,889,984 bytes).
 
 The offline image carries four payload systems, generated so that every value of every enum appears in at least one of them (`nix build .#checks.x86_64-linux.payload-coverage` prints the coverage), plus the build-time inputs for the handful of derivations that can never be prebuilt.
 
