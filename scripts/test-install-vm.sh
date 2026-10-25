@@ -171,8 +171,14 @@ if want_stage 1; then
     truncate -s 4G "$STICK"
     "$USB" write "$STICK" --iso "$ISO" --yes > "$WORK/$VARIANT-usb.log" 2>&1 \
       || { bad "wabisabi-usb write failed:"; sed 's/^/      /' "$WORK/$VARIANT-usb.log"; exit 1; }
+    # TWO identities in the key file, the wrong one FIRST, as a keys.txt
+    # holding more than one key can be: the installer must use the one that
+    # opens the repo (a real stick once carried only the first, which did not).
+    AGE_KEYGEN=$(nix build --no-link --print-out-paths nixpkgs#age 2>/dev/null | head -1)/bin/age-keygen
+    "$AGE_KEYGEN" 2>/dev/null > "$WORK/$VARIANT-keys.txt"
+    cat "$REPO/installer/test-age-key.txt" >> "$WORK/$VARIANT-keys.txt"
     "$USB" kit "$STICK" --source "$FIXTURE" --host laptop --repo-path /home/tester/src/fleet \
-      --age-key "$REPO/installer/test-age-key.txt" --ssh-key none --passphrase-file "$KITPASS" --yes \
+      --age-key "$WORK/$VARIANT-keys.txt" --ssh-key none --passphrase-file "$KITPASS" --yes \
       >> "$WORK/$VARIANT-usb.log" 2>&1 \
       || { bad "wabisabi-usb kit failed:"; sed 's/^/      /' "$WORK/$VARIANT-usb.log"; exit 1; }
     ok "stick written and kit added ($STICK)"

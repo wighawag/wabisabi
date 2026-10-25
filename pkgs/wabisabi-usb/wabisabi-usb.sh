@@ -313,9 +313,18 @@ kit_gather() {
   # The age key, read from a file and never typed.
   [ -n "$AGE_KEY" ] || AGE_KEY="$home/.config/sops/age/keys.txt"
   [ -r "$AGE_KEY" ] || die "no age key at $AGE_KEY. Give --age-key FILE (on a machine where the key is root-only, e.g. --age-key /root/.config/sops/age/keys.txt)."
-  local key
-  key=$(grep -m1 '^AGE-SECRET-KEY-1' "$AGE_KEY" || true)
-  valid_age_key "$key" || die "$AGE_KEY holds no valid age secret key."
+  # EVERY key in the file goes in the kit: a keys.txt may hold several
+  # identities, and the installer uses the one that opens the repo. Taking
+  # only the first once put a key on the stick that opened nothing.
+  local key="" k pubs=""
+  while IFS= read -r k; do
+    valid_age_key "$k" || continue
+    key+="$k"$'\n'
+    pubs+="$(age-keygen -y <(printf '%s\n' "$k")) "
+  done < <(grep '^AGE-SECRET-KEY-1' "$AGE_KEY" || true)
+  [ -n "$key" ] || die "$AGE_KEY holds no valid age secret key."
+  note "Age key(s) from $AGE_KEY: $pubs"
+  note "The installer checks them against the repo's secrets; the admin key's public half is in the repo's .sops.yaml."
 
   # An ssh key, when the repo is fetched over ssh (a private repo, or flake
   # inputs pinned as git+ssh).
@@ -364,7 +373,7 @@ kit_apply() {
   # Build the kit in tmpfs, encrypt it there, then write it: no mapping, no
   # mount, and the plaintext never reaches the stick.
   mkdir -m 0700 "$WORK/kit"
-  (umask 077; printf '%s\n' "$key" > "$WORK/kit/age.key")
+  (umask 077; printf '%s' "$key" > "$WORK/kit/age.key")
   [ -n "$SSH_KEY" ] && install -m 0600 "$SSH_KEY" "$WORK/kit/ssh-key"
   jq -n --arg s "$SOURCE" --arg h "$HOST" --arg p "$REPO_PATH" \
     '{"install:mode": "restore", "restore:source": $s, "restore:host": $h}

@@ -430,6 +430,8 @@ restore_ready=0
 RESTORE_CLONE="" RESTORE_HOST="" RESTORE_REPO_PATH="" RESTORE_KEYFILE_PATH=""
 RESTORE_PW_FROM_SECRETS=0 RESTORE_PW_DECLARED=0 RESTORE_DISKO=0 RESTORE_TEMPLATE_SECRETS=0
 RESTORE_DISKS=()
+# Further keys a restore kit carried, tried after restore:ageKey.
+RESTORE_EXTRA_KEYS=()
 
 restore_eval_in() {
   local src="$1" attr="$2" fn="$3"
@@ -633,8 +635,27 @@ EOF
     [ -s "$WORK/age.key" ] || die "the config has encrypted secrets, and restoring it needs the age key that opens them."
   fi
   if [ -n "$probe_file" ]; then
-    restore_decrypt "$probe_file" "$probe_format" >/dev/null 2>&1 \
-      || die "that key does not open this repo's secrets ($probe_file). Nothing was touched."
+    # A restore kit may carry SEVERAL keys (a keys.txt holding more than one
+    # identity): the one that opens this repo is the one used, and the only
+    # one that goes anywhere afterwards.
+    local candidate opened=0
+    for candidate in "$key" "${RESTORE_EXTRA_KEYS[@]}"; do
+      [ -n "$candidate" ] || continue
+      valid_age_key "$candidate" || continue
+      (umask 077; printf '%s\n' "$candidate" > "$WORK/age.key")
+      if restore_decrypt "$probe_file" "$probe_format" >/dev/null 2>&1; then
+        opened=1
+        set_answer "restore:ageKey" "$candidate"
+        break
+      fi
+    done
+    if [ "$opened" = 0 ]; then
+      local given wanted
+      given=$(for candidate in "$key" "${RESTORE_EXTRA_KEYS[@]}"; do
+        [ -n "$candidate" ] && age-keygen -y <(printf '%s\n' "$candidate") 2>/dev/null; done | sort -u | tr '\n' ' ')
+      wanted=$(grep -oE 'age1[a-z0-9]{58}' "$probe_file" | sort -u | tr '\n' ' ')
+      die "the age key given does not open this repo's secrets ($probe_file). Given: ${given:-none}. That file opens with: ${wanted:-unknown}. Nothing was touched."
+    fi
     note "Your key opens the repo's secrets."
   fi
 
@@ -767,6 +788,7 @@ load_kit() {
     # The key file may carry age-keygen's comment lines; the key is the one
     # line that is a key.
     set_answer "restore:ageKey" "$(grep -m1 '^AGE-SECRET-KEY-1' "$WORK/kit/age.key" || true)"
+    mapfile -t RESTORE_EXTRA_KEYS < <(grep '^AGE-SECRET-KEY-1' "$WORK/kit/age.key" | tail -n +2)
   else
     set_answer "restore:ageKey" ""
   fi
