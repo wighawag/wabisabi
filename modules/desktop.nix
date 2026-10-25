@@ -202,6 +202,11 @@ lib.mkIf cfg.enable {
     pamixer
     playerctl
     wf-recorder
+    # X11 apps (wine, older games, some prebuilt binaries). niri has no X
+    # server of its own; since 25.08 it starts xwayland-satellite on demand
+    # when one is on PATH and sets DISPLAY for the session, so this line is
+    # the whole integration. Without it an X11-only app simply never opens.
+    xwayland-satellite
   ])
   # The greeter, so `noctalia-greeter-print-greetd-config` and friends are
   # reachable for troubleshooting a login that will not come up.

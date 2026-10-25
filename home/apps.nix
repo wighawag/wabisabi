@@ -32,7 +32,10 @@ lib.mkIf cfg.enable {
     ++ (lib.optionals cfg.apps.media [ pkgs.mpv pkgs.imv ])
     ++ (lib.optionals cfg.apps.office [ pkgs.libreoffice ])
     ++ (lib.optionals cfg.apps.email [ pkgs.thunderbird ])
-    ++ (lib.optionals cfg.apps.passwords [ pkgs.keepassxc ]);
+    ++ (lib.optionals cfg.apps.passwords [ pkgs.keepassxc ])
+    ++ (lib.optionals cfg.apps.reading [ pkgs.papers pkgs.foliate ])
+    ++ (lib.optionals cfg.apps.creative [ pkgs.gimp pkgs.inkscape pkgs.obs-studio ])
+    ++ (lib.optionals cfg.apps.torrent [ pkgs.qbittorrent ]);
 
   # Syncthing: peer-to-peer, self-hostable by construction.
   services.syncthing = lib.mkIf cfg.apps.syncthing {

@@ -266,6 +266,70 @@
       '';
     };
 
+    # ── Tools beyond the desktop baseline. See modules/tools.nix.
+
+    scanning.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Scanning: SANE with the eSCL/WSD network backend (sane-airscan), plus
+        Document Scanner (simple-scan) and XSane. Like printing, it is
+        DRIVERLESS: any network scanner or multifunction printer made in the
+        last decade answers over eSCL, so the unfree vendor tools (Epson's
+        epsonscan2, for one) are not needed and the libre rule holds.
+
+        The owner (`wabisabi.user`) joins the `scanner` and `lp` groups, which
+        is what lets a USB scanner be used without root.
+      '';
+    };
+
+    flatpak.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Flatpak, with Flathub added as a remote and Flatseal (a settings app
+        for each Flatpak app's permissions: folders, devices, network)
+        installed from it.
+
+        The escape hatch for an app that nixpkgs does not carry. Flatpak apps
+        are not built by Nix, so the libre rule does NOT reach them: Flathub
+        carries proprietary apps too, and installing one is your decision, not
+        the system's. Off by default for that reason, and because adding the
+        remote and installing Flatseal needs the network at boot (a oneshot
+        unit that retries on the next boot if it is offline).
+      '';
+    };
+
+    dev.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        A developer's toolbox, machine-wide: Node.js (with npm) and pnpm, uv
+        (Python), cmake, ninja, clang, mold, ccache, nasm, bison, gperf,
+        sops, wireguard-tools, tshark (Wireshark's CLI, capture allowed for
+        the owner), ImageMagick, ffmpeg, yt-dlp and the Zed editor.
+
+        Per-project versions still belong in a dev shell (direnv and
+        nix-direnv are on with the bash stack); these are the ones a terminal
+        finds when there is no project around it. clang is installed at LOW
+        PRIORITY, so where a gcc is also installed `cc` and `c++` stay gcc's
+        and nothing switches compiler behind your back; `clang` and `clang++`
+        are always clang's.
+      '';
+    };
+
+    virtualisation.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Virtual machines: libvirt with QEMU/KVM, and virt-manager to drive it.
+        QEMU is the host-architecture build (qemu_kvm), not the one that
+        emulates every CPU, which is most of its size. The owner
+        (`wabisabi.user`) joins the `libvirtd` group, so virt-manager needs no
+        password.
+      '';
+    };
+
     # ── The agent layer: a local model, private search, and agents that use
     # them, for the owner and for anonymous accounts. See modules/agents.nix.
 

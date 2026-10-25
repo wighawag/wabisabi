@@ -209,6 +209,7 @@
         { option = "system:bluetooth.enable"; }
         { option = "system:cellular.enable"; }
         { option = "system:printing.enable"; }
+        { option = "system:scanning.enable"; }
       ];
     }
 
@@ -314,6 +315,18 @@
         { option = "home:apps.email"; }
         { option = "home:apps.passwords"; }
         { option = "home:apps.syncthing"; }
+        { option = "home:apps.reading"; }
+        { option = "home:apps.creative"; }
+        { option = "home:apps.torrent"; }
+      ];
+    }
+
+    {
+      title = "Tools";
+      items = [
+        { option = "system:dev.enable"; }
+        { option = "system:virtualisation.enable"; }
+        { option = "system:flatpak.enable"; }
       ];
     }
   ];

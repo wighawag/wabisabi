@@ -125,6 +125,21 @@ let
     '';
   };
 
+  # A colour picker with no app: niri picks a pixel itself (`niri msg
+  # pick-color`, click anywhere, Escape cancels), and this puts the hex on the
+  # clipboard and says so.
+  pickColorScript = pkgs.writeShellApplication {
+    name = "wabisabi-pick-color";
+    runtimeInputs = [ pkgs.niri pkgs.wl-clipboard pkgs.libnotify pkgs.gnused ];
+    text = ''
+      out=$(niri msg pick-color) || exit 0
+      hex=$(printf '%s\n' "$out" | sed -n 's/^Hex: *//p')
+      [ -n "$hex" ] || exit 0
+      printf '%s' "$hex" | wl-copy
+      notify-send "Colour picked" "$hex, copied to the clipboard"
+    '';
+  };
+
   # Workspace binds, generated. niri workspaces are dynamic, so an index
   # beyond the current count lands on the bottom-most empty workspace.
   wsBinds = lib.listToAttrs (lib.concatMap (i: [
@@ -134,7 +149,7 @@ let
 
 in
 lib.mkIf cfg.enable {
-  home.packages = [ recordScript ]
+  home.packages = [ recordScript pickColorScript ]
     ++ lib.optional (!noctalia) pkgs.fuzzel;
 
   # ─── niri compositor ───
@@ -245,6 +260,7 @@ lib.mkIf cfg.enable {
 
         # Recording / lock / monitors off
         "Mod+Shift+R".spawn = lib.getExe recordScript;
+        "Mod+Shift+C".spawn = lib.getExe pickColorScript;
         "Mod+Shift+L".spawn-sh = lockCmd;
         "Mod+Shift+P".power-off-monitors = { };
 

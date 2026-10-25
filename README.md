@@ -35,13 +35,20 @@ or to leave it.
 | Passwords | KeePassXC — local-first | GPL |
 | Sync | Syncthing — P2P, self-hostable (optional) | MPL |
 | Media | mpv + imv | GPL/MIT |
+| Reading | Papers (documents) + Foliate (ebooks) | GPL |
+| Creative (optional) | GIMP, Inkscape, OBS Studio | GPL |
+| Torrents (optional) | qBittorrent | GPL |
+| Scanning | Document Scanner + XSane, driverless over eSCL (sane-airscan) | GPL |
+| Developer tools (optional) | Node.js, pnpm, uv, cmake, ninja, clang, mold, ccache, tshark, ffmpeg, ImageMagick, yt-dlp, Zed | various OSS |
+| Virtual machines (optional) | libvirt + QEMU/KVM + virt-manager | GPL/LGPL |
+| Flatpak (optional) | Flatpak + Flathub, with Flatseal for permissions; outside the libre rule's reach | LGPL/GPL |
 | Theme | Sumi: indigo ink and warm paper, from the enso wallpaper; Catppuccin Mocha as a choice | CC0 / MIT |
 | Local AI model | llama.cpp + Gemma 4 E4B, on the CPU, on a unix socket | MIT / Apache-2.0 |
 | Coding agent | pi, with wherever (a web UI for its sessions) | MIT / AGPL |
 | Search | webveil, on SearXNG or on its own searchcast engines (no account, no profile) | AGPL |
 | Recall | memonaut (search your past agent sessions) | AGPL |
 | Browser automation | webhands on nixpkgs' Chromium | AGPL / BSD |
-| Terminal tools | zellij, direnv, eza, bat; nix-ld for foreign binaries | MIT / Apache |
+| Terminal tools | zellij, direnv, eza, bat, micro, lazygit, htop, jq, yq, tree, mtr, nmap, tcpdump, lsof; nix-ld for foreign binaries, xwayland-satellite for X11 apps | MIT / Apache / GPL |
 | Anonymous accounts | anonctl: every packet forced through Tor, fail-closed | AGPL |
 
 ## AI and privacy, on the machine
@@ -231,6 +238,30 @@ On the offline ISO a restore works with no network only if the repo's `flake.loc
 - **The password** the config declares (its own sops secret, a hash) is trusted, not asked for.
 - **Where the repo goes** is asked (`restore:repoPath`), defaulting to the `/etc/nixos` link the config declares, or `~/nixos`.
 
+**Preparing a USB stick for a restore.** An age key is 74 characters, which nobody should have to type at a password prompt, so put the answers in a file on a stick and give it to `--answers`. On the machine that holds the key (before you wipe it, if it is the same machine), with the stick mounted at `$U`:
+
+```sh
+U=/media/$USER/<LABEL>                                    # where the stick is mounted
+install -m600 ~/.ssh/id_ed25519 "$U/ssh-key"              # only for a private repo or git+ssh inputs
+jq -n --arg k "$(grep -m1 '^AGE-SECRET-KEY' ~/.config/sops/age/keys.txt)" '{
+  "install:mode": "restore",
+  "restore:source": "git@github.com:you/your-config.git",
+  "restore:host": "laptop",
+  "restore:sshKeyFile": "/mnt/usb/ssh-key",
+  "restore:ageKey": $k
+}' > "$U/restore.json"
+sync && udisksctl unmount -b /dev/sdX1
+```
+
+Use the path `restore:sshKeyFile` will have ON THE ISO, not on the machine you prepare it from. Add `"restore:repoPath"` to choose where the repo lands, and, for a config that does not declare its disks, `"disk:device"`, `"disk:layout"` and (for `luks`) `"disk:passphrase"`; a disko config with an encrypted disk has disko ask for the passphrase itself, typed on the keyboard layout the config declares. Then, booted from the ISO:
+
+```sh
+sudo mkdir -p /mnt/usb && sudo mount /dev/sdX1 /mnt/usb
+sudo wabisabi-install --answers /mnt/usb/restore.json
+```
+
+That stick now holds your age key in the clear (for a fleet, the admin key that opens every machine's secrets), so keep it on you and delete `restore.json` and the ssh key from it once the machine is back. The copy that lasts belongs in your password manager, not on a stick.
+
 **The offline ISO is a live system.** It boots straight into the wabisabi desktop (user `nixos`, no password), so the machine can be tried before anything touches its disk: a welcome terminal says what to try and holds the install command. Everything runs from the stick and from RAM; the local model starts on first use rather than at boot, to spare that RAM. Its boot menu also has a **text installer only** entry, which is the plain installer with no desktop.
 
 niri refuses a software renderer, so a live desktop on a machine with no usable GPU would be a black screen with niri running behind it. The live session therefore waits for the GPU driver and, if there is still no render node, starts a text shell that says so and how to install instead. The netinstall ISO stays text-only and small.
@@ -387,6 +418,7 @@ The other two keyboards are the text ones. The option also switches on `console.
 | `Super+Shift+S` | Screenshot (interactive: region, window or screen) |
 | `Print` / `Alt+Print` | Screenshot whole screen / focused window |
 | `Super+Shift+R` | Toggle screen recording |
+| `Super+Shift+C` | Pick a colour anywhere on screen; its hex goes to the clipboard |
 | `Super+Shift+L` | Lock (auto-locks after 5 min idle) |
 | `Super+Shift+P` | Power off the monitors |
 | `Super+Escape` | Release keyboard shortcuts to the focused app |

@@ -153,14 +153,33 @@ lib.mkIf cfg.enable {
     }
   );
 
-  # Small opinionated CLI base for any TTY session.
+  # mtr through its NixOS module rather than as a bare package: the module
+  # installs it with the capability raw ICMP needs, so it works without sudo.
+  programs.mtr.enable = lib.mkDefault true;
+
+  # Small opinionated CLI base for any TTY session: what you reach for to look
+  # at files, processes, the network and JSON, on any machine, before there is
+  # a project or a dev shell around you.
   environment.systemPackages = with pkgs; [
     git
+    lazygit
     curl
+    wget
     ripgrep
     fd
+    tree
     btop
+    htop
     tmux
+    micro       # a terminal editor with the keys everyone already knows
+    jq
+    yq-go       # jq for YAML (and TOML, XML)
+    zip
+    unzip
+    lsof
+    nmap
+    tcpdump
+    inotify-tools
   ]
   ++ lib.optionals cfg.bash.enable [
     eza

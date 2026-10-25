@@ -141,6 +141,28 @@ in
       description = "KeePassXC — local-first password database (no cloud service).";
     };
 
+    apps.reading = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Reading: Papers (PDF and other documents, GNOME's GTK4 viewer) and Foliate (ebooks).";
+    };
+
+    apps.creative = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Creative: GIMP (raster images), Inkscape (vector drawing) and OBS
+        Studio (recording and streaming, with its browser source). Large:
+        about 3.7 GB, two thirds of it OBS's embedded browser.
+      '';
+    };
+
+    apps.torrent = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "qBittorrent, a BitTorrent client with no account, no ads and a search plugin system.";
+    };
+
     apps.syncthing = lib.mkOption {
       type = lib.types.bool;
       default = false;
