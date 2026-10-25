@@ -15,7 +15,9 @@
 #       what anyone can rebuild), upload them with their checksums, put the
 #       version first in releases.json, and write the checksums into the
 #       GitHub release's notes (a second channel: a tampered bucket cannot
-#       also rewrite GitHub). Then keep only the newest N versions, default 1:
+#       also rewrite GitHub). The netinstall ISO is also attached to the
+#       GitHub release, as the website's fallback download, and the website is
+#       rebuilt to pick it up. Then keep only the newest N versions, default 1:
 #       older ones are deleted from the bucket. Anything deleted can be rebuilt
 #       from its tag (`nix build github:wighawag/wabisabi/vX.Y.Z#iso-offline`).
 #   scripts/release.sh delete 0.1.0 [--dry-run]
@@ -35,6 +37,9 @@ set -euo pipefail
 BUCKET="${WABISABI_BUCKET:-wasisabi-releases}"
 DOWNLOADS="${WABISABI_DOWNLOADS:-https://downloads.wabisabi.computer}"
 REPO="wighawag/wabisabi"
+# The website, rebuilt after a release so its baked-in fallback follows.
+SITE_REPO="wighawag/wabisabi-website"
+SITE_WORKFLOW="pages.yml"
 ISOS=(offline netinstall)
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -187,6 +192,23 @@ case "$cmd" in
       run gh release edit "v$version" -R "$REPO" --notes-file "$work/notes.md"
     else
       run gh release create "v$version" -R "$REPO" --verify-tag --prerelease --title "wabisabi $version" --notes-file "$work/notes.md"
+    fi
+
+    # The netinstall ISO also goes on the GitHub release: it is the website's
+    # fallback, which has to outlive the bucket's deletions. (The offline ISO
+    # is over GitHub's 2 GiB asset limit, so it is only in the bucket.)
+    say "attaching the netinstall ISO to the GitHub release"
+    mkdir "$work/gh"
+    cp "$(echo "$work/iso-netinstall"/iso/*.iso)" "$work/gh/wabisabi-netinstall.iso"
+    grep '  wabisabi-netinstall\.iso$' "$work/SHA256SUMS" > "$work/gh/SHA256SUMS"
+    run gh release upload "v$version" -R "$REPO" --clobber "$work/gh/wabisabi-netinstall.iso" "$work/gh/SHA256SUMS"
+
+    # The website bakes that fallback in at build time: rebuild it.
+    say "rebuilding the website ($SITE_REPO)"
+    if [ "$dry" = 1 ]; then
+      echo "would run: gh workflow run $SITE_WORKFLOW -R $SITE_REPO" >&2
+    elif ! gh workflow run "$SITE_WORKFLOW" -R "$SITE_REPO"; then
+      echo "release: could not start the website build; its download card falls back to the previous release until 'gh workflow run $SITE_WORKFLOW -R $SITE_REPO'" >&2
     fi
     say "published v$version (keeping $keep version(s))"
     ;;

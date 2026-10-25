@@ -75,6 +75,7 @@ scripts/release.sh publish 0.2.0             # ... and does them
 3. puts the version first in `releases.json`;
 4. **keeps only the newest version** (`--keep N` for more) and deletes the rest from the bucket;
 5. writes the download links and checksums into the GitHub release's notes, creating the release if needed. That is a second channel: someone who could tamper with the bucket still could not make GitHub agree.
+6. attaches the netinstall ISO and its `SHA256SUMS` line to the GitHub release (the offline ISO is over GitHub's 2 GiB asset limit), and starts the website's Pages workflow. The website's download card reads the bucket live, but until that answers, or if it never does (no CORS policy on the bucket, say), it shows a fallback baked in at build time: the netinstall ISO of the newest GitHub release carrying one. GitHub keeps it when the bucket deletes the version, so the fallback never points at a deleted file. Starting the workflow needs `gh` logged in with access to `wighawag/wabisabi-website`; if it fails, the release still stands and `gh workflow run pages.yml -R wighawag/wabisabi-website` does it by hand.
 
 Other commands:
 

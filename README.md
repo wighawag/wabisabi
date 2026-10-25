@@ -451,7 +451,7 @@ scripts/release.sh delete 0.1.0              # removes one version
 scripts/release.sh list
 ```
 
-`publish` builds both ISOs from the tag on GitHub (the netinstall image rebuilt from `v0.1.0` came out byte-identical to the published one), uploads them with a `SHA256SUMS`, and writes the checksums into the GitHub release's notes as well, so a tampered bucket cannot also rewrite GitHub. Only the newest version is kept by default, because an offline ISO is about 9 GB of storage; a deleted version is never lost, since its tag rebuilds it. It needs an R2 API token (Object Read & Write, this bucket only) as `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, in the environment or in `~/.config/wabisabi/r2.env`.
+`publish` builds both ISOs from the tag on GitHub (the netinstall image rebuilt from `v0.1.0` came out byte-identical to the published one), uploads them with a `SHA256SUMS`, and writes the checksums into the GitHub release's notes as well, so a tampered bucket cannot also rewrite GitHub. The netinstall ISO is attached to the GitHub release too, as the website's fallback download, and the website is rebuilt to pick it up. Only the newest version is kept by default, because an offline ISO is about 9 GB of storage; a deleted version is never lost, since its tag rebuilds it. It needs an R2 API token (Object Read & Write, this bucket only) as `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, in the environment or in `~/.config/wabisabi/r2.env`.
 
 The one-time Cloudflare setup (bucket, domain, CORS, upload key) and the reasons behind all this: [`notes/releasing.md`](notes/releasing.md).
 
