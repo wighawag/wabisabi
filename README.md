@@ -174,7 +174,7 @@ Download one from [wabisabi.computer](https://wabisabi.computer) (the live ISO, 
 ```sh
 nix build github:wighawag/wabisabi#iso-netinstall   # small, needs a network
 nix build github:wighawag/wabisabi#iso-offline      # LIVE: try it first; carries everything, installs with no network
-# write result/iso/*.iso to a USB stick, boot it, then:
+# write it to a USB stick (wabisabi-usb write /dev/sdX --iso result/iso/*.iso), boot it, then:
 sudo wabisabi-install
 ```
 
@@ -238,31 +238,26 @@ On the offline ISO a restore works with no network only if the repo's `flake.loc
 - **The password** the config declares (its own sops secret, a hash) is trusted, not asked for.
 - **Where the repo goes** is asked (`restore:repoPath`), defaulting to the `/etc/nixos` link the config declares, or `~/nixos`.
 
-**Preparing a USB stick for a restore.** An age key is 74 characters, which nobody should have to type at a password prompt, so put the answers in a file on a stick and give it to `--answers`. On the machine that holds the key (before you wipe it, if it is the same machine), with the stick mounted at `$U`:
+**Preparing a USB stick for a restore: `wabisabi-usb`.** One stick carries both the installer and what a restore needs. On the machine that holds your age key (before you wipe it, if it is the same machine), from your config repo's checkout:
 
 ```sh
-U=/media/$USER/<LABEL>                                    # where the stick is mounted
-install -m600 ~/.ssh/id_ed25519 "$U/ssh-key"              # only for a private repo or git+ssh inputs
-jq -n --arg k "$(grep -m1 '^AGE-SECRET-KEY' ~/.config/sops/age/keys.txt)" '{
-  "install:mode": "restore",
-  "restore:source": "git@github.com:you/your-config.git",
-  "restore:host": "laptop",
-  "restore:sshKeyFile": "/mnt/usb/ssh-key",
-  "restore:ageKey": $k
-}' > "$U/restore.json"
-sync && udisksctl unmount -b /dev/sdX1
+lsblk                                                              # find the stick, e.g. /dev/sdb
+sudo nix run github:wighawag/wabisabi#usb -- write /dev/sdb --release netinstall --kit
 ```
 
-Use the path `restore:sshKeyFile` will have ON THE ISO, not on the machine you prepare it from. Add `"restore:repoPath"` to choose where the repo lands, and, for a config that does not declare its disks, `"disk:device"`, `"disk:layout"` and (for `luks`) `"disk:passphrase"`; a disko config with an encrypted disk has disko ask for the passphrase itself, typed on the keyboard layout the config declares. Then, booted from the ISO:
+`write` downloads the newest ISO (or takes yours, `--iso FILE`), checks it against its published SHA-256, writes it, and adds a partition in the space after it. `--kit` then puts a **restore kit** there: it asks for the repo (offering the one you run it from), which machine in it, where the repo goes, and a passphrase, and takes your age key from `~/.config/sops/age/keys.txt` and, for a repo fetched over ssh, your `~/.ssh/id_ed25519` (`--age-key`, `--ssh-key FILE|none` to choose others). Keys are read from files, never typed. The kit is encrypted (LUKS2, argon2id) with that passphrase, so a lost stick gives nothing away without it.
+
+Boot the stick and run `sudo wabisabi-install`: it finds the kit, asks its passphrase, and restores with no other questions than a disk's, for a config that does not declare its own. Once the machine is installed it offers to erase the kit, since nothing needs your admin key on that stick any more. The ISO on the stick is untouched (`write` checks it byte for byte), so it stays an ordinary installer.
 
 ```sh
-sudo mkdir -p /mnt/usb && sudo mount /dev/sdX1 /mnt/usb
-sudo wabisabi-install --answers /mnt/usb/restore.json
+wabisabi-usb kit /dev/sdb      # (re)make the kit on a stick already written
+wabisabi-usb show /dev/sdb     # is there a kit on it?
+wabisabi-usb wipe /dev/sdb     # erase it
 ```
 
-That stick now holds your age key in the clear (for a fleet, the admin key that opens every machine's secrets), so keep it on you and delete `restore.json` and the ssh key from it once the machine is back. The copy that lasts belongs in your password manager, not on a stick.
+`wabisabi-usb` refuses a disk that is not removable or USB (`--any-disk` to insist), one with anything mounted, and the disk the running system booted from, and asks you to type the device name before writing. It is also on the installer medium itself, so a live session can make the next stick.
 
-Writing the ISO to a stick erases the whole stick, so the answers cannot share it with the ISO: use a second stick (or a Ventoy stick, which boots the ISO as a file and keeps its own data partition).
+Without it, the answers can be given as a file instead: `sudo wabisabi-install --answers restore.json` with `install:mode`, `restore:source`, `restore:host`, `restore:ageKey` and `restore:sshKeyFile` (and, for a config that does not declare its disks, `disk:device`, `disk:layout`, `disk:passphrase`). That file holds your age key in the clear and cannot share a stick with the ISO, which is what the kit fixes.
 
 **Before you wipe, a checklist.** A restore brings back what your config declares and nothing else: the system, the secrets, the password. Everything the old install accumulated by hand is on that disk only. Go through it while the machine still boots:
 

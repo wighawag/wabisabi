@@ -84,11 +84,16 @@
       questionsJson = pkgs.writeText "wabisabi-questions.json" (builtins.toJSON questions);
       targetLock = pkgs.callPackage ./installer/lock.nix { inherit self; };
       secretsTool = pkgs.callPackage ./pkgs/wabisabi-secrets/package.nix { };
+      usbTool = pkgs.callPackage ./pkgs/wabisabi-usb/package.nix { };
+
+      # The restore kit's passphrase in the VM test, and in the usb-tool check.
+      # A published test value, like installer/test-age-key.txt.
+      testKitPassphrase = pkgs.writeText "wabisabi-test-kit-passphrase" "testkitpassphrase";
 
       mkInstaller =
         { offline }:
         pkgs.callPackage ./installer/package.nix {
-          inherit offline targetLock secretsTool;
+          inherit offline targetLock secretsTool usbTool;
           questions = questionsJson;
           template = ./template;
           stateVersion = release;
@@ -507,6 +512,17 @@
         offline = false;
         autotest = restoreFleetAnswers;
       };
+      # The fleet restore again, but from a RESTORE KIT on the installer's own
+      # stick (wabisabi-usb), with no answers file at all: the harness writes
+      # this ISO and a kit to a stick image, and boots from it.
+      nixosConfigurations.isoAutotestRestoreKit = mkIso {
+        offline = false;
+        autotest = {
+          kitPassphrase = testKitPassphrase;
+          # The fixture the kit points at, in the medium's store.
+          keep = [ restoreFleetFixture ];
+        };
+      };
       nixosConfigurations.isoAutotestOffline = mkIso {
         offline = true;
         autotest = autotestAnswers "plain";
@@ -524,6 +540,8 @@
         questions = questionsJson;
         target-lock = targetLock;
         wabisabi-secrets = secretsTool;
+        usb = usbTool;
+        wabisabi-usb = usbTool;
         iso-netinstall = self.nixosConfigurations.isoNetinstall.config.system.build.isoImage;
         iso-offline = self.nixosConfigurations.isoOffline.config.system.build.isoImage;
         iso-autotest = self.nixosConfigurations.isoAutotest.config.system.build.isoImage;
@@ -533,6 +551,8 @@
         restore-fixture = restoreFixture;
         iso-autotest-restore-fleet = self.nixosConfigurations.isoAutotestRestoreFleet.config.system.build.isoImage;
         restore-fleet-fixture = restoreFleetFixture;
+        iso-autotest-restore-kit = self.nixosConfigurations.isoAutotestRestoreKit.config.system.build.isoImage;
+        test-kit-passphrase = testKitPassphrase;
       };
 
       checks.${system} =
@@ -1249,7 +1269,74 @@
               ''
                 shellcheck --shell=bash --severity=style \
                   ${./installer/install.sh} ${./installer/emit.sh} \
+                  ${./installer/disks.sh} ${./pkgs/wabisabi-usb/wabisabi-usb.sh} \
                   ${./pkgs/wabisabi-secrets/wabisabi-secrets.sh}
+                touch $out
+              '';
+
+          # wabisabi-usb on image FILES, which it supports for exactly this:
+          # no root, no device. A fake ISO (random bytes behind an MBR, like
+          # an isohybrid image) is written, a kit added, read back, replaced
+          # and erased. The real ISO booting from a real stick layout, with a
+          # kit the installer opens, is scripts/test-install-vm.sh --restore-kit.
+          usb-tool =
+            pkgs.runCommand "wabisabi-usb-tool"
+              {
+                nativeBuildInputs = [
+                  usbTool
+                  pkgs.cryptsetup
+                  pkgs.util-linux
+                  pkgs.jq
+                ];
+              }
+              ''
+                set -euo pipefail
+                export HOME=$TMPDIR
+                cd $TMPDIR
+                fail() { echo "FAIL: $*" >&2; exit 1; }
+
+                head -c $((16 * 1024 * 1024)) /dev/urandom > fake.iso
+                echo "start=2048, size=8192, type=ef" | sfdisk --quiet fake.iso
+                truncate -s 200M stick.img
+                cp ${testKitPassphrase} pass
+                printf wrong > wrong
+
+                # Too small a stick is refused before anything is written.
+                truncate -s 40M small.img
+                if wabisabi-usb write small.img --iso fake.iso --yes; then fail "a too-small stick was accepted"; fi
+
+                # A kit needs the data partition first.
+                if wabisabi-usb kit stick.img --source x --host h --age-key ${./installer/test-age-key.txt} \
+                     --ssh-key none --passphrase-file pass --yes; then fail "kit without a data partition"; fi
+
+                wabisabi-usb write stick.img --iso fake.iso --yes > write.log; cat write.log
+                grep -q WABISABI_USB_WRITTEN write.log || fail "no write sentinel"
+                start=$(sfdisk -J stick.img | jq '.partitiontable.partitions[] | select(.type == "83") | .start')
+                [ "$start" = 32768 ] || fail "data partition at sector $start, expected 32768 (the first MiB after 16 MiB)"
+                cmp -s -i 510 -n $((16 * 1024 * 1024 - 510)) fake.iso stick.img || fail "the ISO was changed"
+
+                wabisabi-usb kit stick.img --source https://example.org/fleet.git --host laptop \
+                  --repo-path /home/tester/src/fleet --age-key ${./installer/test-age-key.txt} \
+                  --ssh-key none --passphrase-file pass --yes > kit.log; cat kit.log
+                grep -q WABISABI_USB_KIT kit.log || fail "no kit sentinel"
+                wabisabi-usb show stick.img > show.log; grep -q "A restore kit is on it" show.log || fail "show does not see the kit"
+
+                dd if=stick.img of=kit.img bs=1M skip=16 count=64 status=none
+                [ "$(blkid -p -o value -s LABEL kit.img)" = WABISABI-DATA ] || fail "kit not labelled WABISABI-DATA"
+                cryptsetup open --test-passphrase --disable-locks --key-file pass kit.img || fail "the passphrase does not open the kit"
+                if cryptsetup open --test-passphrase --disable-locks --key-file wrong kit.img 2>/dev/null; then fail "a wrong passphrase opens the kit"; fi
+
+                # Writing the stick again must not leave the old kit behind.
+                wabisabi-usb write stick.img --iso fake.iso --yes >/dev/null
+                wabisabi-usb show stick.img > show.log; grep -q "No restore kit" show.log || fail "a rewrite kept the old kit"
+
+                wabisabi-usb kit stick.img --source x --host laptop --age-key ${./installer/test-age-key.txt} \
+                  --ssh-key none --passphrase-file pass --yes >/dev/null
+                wabisabi-usb wipe stick.img --yes > wipe.log; grep -q WABISABI_USB_WIPED wipe.log || fail "no wipe sentinel"
+                wabisabi-usb show stick.img > show.log; grep -q "No restore kit" show.log || fail "the kit survived the wipe"
+                dd if=stick.img of=kit.img bs=1M skip=16 count=64 status=none
+                [ -z "$(blkid -p -o value -s TYPE kit.img || true)" ] || fail "something is still recognisable after the wipe"
+
                 touch $out
               '';
 

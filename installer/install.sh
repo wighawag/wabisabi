@@ -14,6 +14,16 @@
 #   wabisabi-install --answers answers.json   unattended, same questions
 #   wabisabi-install --out-only DIR           just write the flake, touch no disk
 #
+# A RESTORE KIT (made by `wabisabi-usb kit`) is an encrypted partition on the
+# installer's own USB stick holding the restore answers and keys. Without
+# --answers, the installer looks for one and offers to restore from it.
+#
+#   --kit DEV|auto              use the kit on DEV (auto: find it by label)
+#   --no-kit                    do not look for one
+#   --kit-passphrase-file FILE  its passphrase, for an unattended run
+#   --wipe-kit                  erase the kit after a successful install
+#                               (asked otherwise, unless --yes)
+#
 set -euo pipefail
 
 : "${WABISABI_QUESTIONS:?internal: questions.json path not baked in}"
@@ -24,6 +34,7 @@ set -euo pipefail
 : "${WABISABI_URL:?internal: wabisabi input url not baked in}"
 : "${WABISABI_DISKO:?internal: disko layout dir not baked in}"
 : "${WABISABI_NIXPKGS:?internal: nixpkgs source path not baked in}"
+: "${WABISABI_DISKS_LIB:?internal: disks.sh path not baked in}"
 
 # disko resolves `<nixpkgs>` when it evaluates a layout. Point it at the
 # sources on this medium rather than at whatever the environment happens to
@@ -33,6 +44,7 @@ export NIX_PATH="nixpkgs=$WABISABI_NIXPKGS${NIX_PATH:+:$NIX_PATH}"
 WABISABI_OFFLINE="${WABISABI_OFFLINE:-0}"
 
 ANSWERS_IN="" OUT_ONLY="" ASSUME_YES=0 TARGET=/mnt NO_REBOOT=0
+KIT_ARG="" KIT_PASSFILE="" WIPE_KIT=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -42,9 +54,13 @@ while [ $# -gt 0 ]; do
     --yes|-y) ASSUME_YES=1; shift ;;
     --no-reboot) NO_REBOOT=1; shift ;;
     --offline) WABISABI_OFFLINE=1; shift ;;
+    --kit) KIT_ARG="$2"; shift 2 ;;
+    --no-kit) KIT_ARG=none; shift ;;
+    --kit-passphrase-file) KIT_PASSFILE="$2"; shift 2 ;;
+    --wipe-kit) WIPE_KIT=1; shift ;;
     --debug) set -x; shift ;;
     -h|--help)
-      sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *) echo "wabisabi-install: unknown argument '$1'" >&2; exit 2 ;;
@@ -72,8 +88,15 @@ chmod 700 "$WORK"
 # Set the moment the disk is handed to disko, so a later failure can say so.
 DISK_TOUCHED=0
 
+# Where a restore kit is opened, briefly: OUTSIDE $WORK, because $WORK is
+# removed with rm -rf on exit and a mount inside it would be removed with it.
+KIT_MAPPER=wabisabi-kit
+KIT_MNT=/run/wabisabi-kit
+
 on_exit() {
   local code=$?
+  if mountpoint -q "$KIT_MNT" 2>/dev/null; then umount "$KIT_MNT" || true; fi
+  if [ -e "/dev/mapper/$KIT_MAPPER" ]; then cryptsetup close "$KIT_MAPPER" || true; fi
   # The work directory holds the LUKS passphrase while disko formats. Remove
   # it on every exit path, successful or not.
   rm -rf "$WORK"
@@ -108,6 +131,11 @@ set_answer() {
 }
 
 get_answer() { echo "${ANSWER[$1]:-}"; }
+
+# Answers that came from a restore kit: the question loop does not ask them
+# again, and asks everything the kit left out (a disk, for a config that
+# does not declare its own) as usual.
+declare -A PREFILLED=()
 
 # THE INSTALLER'S OWN QUESTIONS NEED THEIR DEFAULTS WRITTEN DOWN, and this is
 # the one place where "unanswered means it follows wabisabi" is NOT true.
@@ -174,6 +202,9 @@ ask_item() {
   prompt=$(jq -r '.prompt' <<<"$item")
   help=$(jq -r '.help // ""' <<<"$item")
   default=$(jq -r '.default // ""' <<<"$item")
+
+  # Already answered by a restore kit.
+  [ -z "${PREFILLED[$key]+set}" ] || return 0
 
   # Conditional questions (the LUKS passphrase only exists for the LUKS
   # layout, the recipe set only for a backend that uses one). The rule is
@@ -288,15 +319,11 @@ valid_age_key() {
 
 # ── disks ─────────────────────────────────────────────────────────────────
 
-live_disk() {
-  # The disk the installer itself booted from, so it can be called out in the
-  # list rather than silently offered as a target.
-  local src
-  src=$(findmnt -no SOURCE /iso 2>/dev/null || true)
-  [ -z "$src" ] && src=$(findmnt -no SOURCE / 2>/dev/null || true)
-  [ -z "$src" ] && return 0
-  lsblk -no PKNAME "$src" 2>/dev/null | head -1
-}
+# live_disk, check_device_safe and confirm_destruction, shared with
+# wabisabi-usb so the two tools cannot disagree about the wrong disk.
+# shellcheck disable=SC1090
+source "$WABISABI_DISKS_LIB"
+
 
 pick_device() {
   local key="$1" live choice device
@@ -319,41 +346,6 @@ pick_device() {
   choice=$(gum choose "${labelled[@]}")
   device=$(awk '{print $1}' <<<"$choice")
   set_answer "$key" "$device"
-}
-
-# Checks that --yes does NOT get to skip, because they are not about being
-# sure, they are about the target being the wrong device entirely.
-check_device_safe() {
-  local device="$1" live mounted
-
-  [ -b "$device" ] || die "'$device' is not a block device."
-
-  live=$(live_disk || true)
-  if [ -n "$live" ] && [ "$(basename "$device")" = "$live" ]; then
-    die "$device is the medium this installer is running from. Refusing."
-  fi
-
-  # Anything mounted on the target is either the running system or somebody's
-  # data that is currently in use. Neither is an install target.
-  mounted=$(lsblk -no MOUNTPOINTS "$device" 2>/dev/null | tr -d ' ' | grep -v '^$' || true)
-  if [ -n "$mounted" ]; then
-    die "$device has mounted filesystems ($(tr '\n' ' ' <<<"$mounted")). Refusing to partition a disk that is in use."
-  fi
-}
-
-confirm_destruction() {
-  local device="$1" typed
-  echo
-  warn "About to DESTROY everything on $device:"
-  lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS "$device" || true
-  echo
-  if [ "$ASSUME_YES" = 1 ]; then
-    note "Proceeding without the typed confirmation (--yes)."
-    return 0
-  fi
-  note "Type the device name ($(basename "$device")) to confirm, or anything else to abort."
-  typed=$(gum input --placeholder "$(basename "$device")")
-  [ "$typed" = "$(basename "$device")" ] || die "not confirmed; no disk was touched."
 }
 
 # ── the installer's own keyboard ───────────────────────────────────────────
@@ -691,14 +683,134 @@ EOF
   apply_keymap
 }
 
+# ── restore kit: the answers and keys, from the installer's own stick ─────
+
+# `wabisabi-usb kit` writes a LUKS2 container labelled WABISABI-DATA into a
+# partition after the ISO on the same stick. Inside: restore.json (the
+# non-secret restore answers), age.key, and optionally ssh-key. Nothing here
+# trusts the stick beyond what an --answers file would be trusted with.
+KIT_LABEL=WABISABI-DATA
+KIT_DEVICE=""
+
+find_kit() {
+  # -c /dev/null: probe the devices now rather than trust a cache.
+  blkid -c /dev/null -o device -t LABEL="$KIT_LABEL" 2>/dev/null | head -1
+}
+
+load_kit() {
+  local dev="$1" pass tries=0 n
+  [ -b "$dev" ] || die "restore kit '$dev' is not a block device."
+  [ "$(id -u)" = 0 ] || die "opening a restore kit needs root. Try: sudo wabisabi-install"
+
+  heading "Restore kit on $dev"
+  # The passphrase never touches anything but a pipe. Traced by nothing.
+  local xtrace=0
+  case "$-" in *x*) xtrace=1; set +x ;; esac
+  while true; do
+    if [ -n "$KIT_PASSFILE" ]; then
+      pass=$(cat "$KIT_PASSFILE")
+    else
+      pass=$(gum input --password --placeholder "the kit's passphrase")
+    fi
+    if printf '%s' "$pass" | cryptsetup open --readonly --key-file - "$dev" "$KIT_MAPPER" 2>/dev/null; then
+      break
+    fi
+    tries=$((tries + 1))
+    if [ -n "$KIT_PASSFILE" ] || [ "$tries" -ge 3 ]; then
+      [ "$xtrace" = 1 ] && set -x
+      die "that passphrase does not open the restore kit. Nothing was touched."
+    fi
+    warn "That passphrase does not open it. Again."
+  done
+  pass=""
+  [ "$xtrace" = 1 ] && set -x
+
+  # Copy out and close at once: the rest of the install reads tmpfs copies,
+  # and the stick holds no open mapping while disks are being partitioned.
+  mkdir -p "$KIT_MNT"
+  mount -o ro,noload "/dev/mapper/$KIT_MAPPER" "$KIT_MNT" || die "the restore kit opened but does not mount."
+  mkdir -m 0700 "$WORK/kit"
+  for n in restore.json age.key ssh-key; do
+    if [ -f "$KIT_MNT/$n" ]; then install -m 0600 "$KIT_MNT/$n" "$WORK/kit/$n"; fi
+  done
+  umount "$KIT_MNT"
+  cryptsetup close "$KIT_MAPPER"
+
+  [ -f "$WORK/kit/restore.json" ] || die "the restore kit has no restore.json. Nothing was touched."
+  jq -e 'type == "object"' "$WORK/kit/restore.json" >/dev/null || die "the restore kit's restore.json is not a JSON object."
+
+  local k v
+  while IFS=$'\t' read -r k v; do
+    set_answer "$k" "$v"
+    PREFILLED[$k]=1
+  done < <(jq -r 'to_entries[] | "\(.key)\t\(.value)"' "$WORK/kit/restore.json")
+  set_answer "install:mode" restore
+  PREFILLED["install:mode"]=1
+
+  if [ -f "$WORK/kit/age.key" ]; then
+    # The key file may carry age-keygen's comment lines; the key is the one
+    # line that is a key.
+    set_answer "restore:ageKey" "$(grep -m1 '^AGE-SECRET-KEY-1' "$WORK/kit/age.key" || true)"
+  else
+    set_answer "restore:ageKey" ""
+  fi
+  PREFILLED["restore:ageKey"]=1
+  if [ -f "$WORK/kit/ssh-key" ]; then
+    set_answer "restore:sshKeyFile" "$WORK/kit/ssh-key"
+  else
+    set_answer "restore:sshKeyFile" ""
+  fi
+  PREFILLED["restore:sshKeyFile"]=1
+  for k in restore:host restore:repoPath; do PREFILLED[$k]=1; done
+
+  KIT_DEVICE="$dev"
+  note "Restoring '$(get_answer restore:host)' from $(get_answer restore:source), as the kit says."
+}
+
+# Erase the kit: its LUKS header (and with it every keyslot) is overwritten,
+# which makes the ciphertext behind it unreadable whatever the passphrase.
+# Flash memory may keep stale copies of erased blocks out of reach of any
+# write, which is why the kit was encrypted in the first place.
+wipe_kit() {
+  local dev="$1"
+  cryptsetup erase -q "$dev" >/dev/null 2>&1 || true
+  dd if=/dev/zero of="$dev" bs=1M count=32 conv=fsync status=none 2>/dev/null || true
+  wipefs -a -q "$dev" 2>/dev/null || true
+  if [ -n "$(blkid -c /dev/null -p -o value -s TYPE "$dev" 2>/dev/null)" ]; then
+    warn "Could not erase the restore kit on $dev. Wipe the stick yourself: it holds your keys."
+    return 1
+  fi
+  echo "WABISABI_KIT_WIPED device=$dev"
+  note "The restore kit on $dev is erased."
+}
+
 # ── run ───────────────────────────────────────────────────────────────────
+
+# A restore kit: named, or found on its own when nothing else was said.
+if [ -n "$KIT_ARG" ] && [ "$KIT_ARG" != none ]; then
+  [ -z "$ANSWERS_IN" ] || die "--kit and --answers are two sources of answers; give one."
+  if [ "$KIT_ARG" = auto ]; then
+    KIT_ARG=$(find_kit)
+    [ -n "$KIT_ARG" ] || die "--kit auto: no restore kit (a partition labelled $KIT_LABEL) found."
+  fi
+  load_kit "$KIT_ARG"
+elif [ -z "$KIT_ARG" ] && [ -z "$ANSWERS_IN" ] && [ -z "$OUT_ONLY" ] && [ "$(id -u)" = 0 ]; then
+  found=$(find_kit)
+  if [ -n "$found" ]; then
+    heading "A restore kit"
+    note "$found holds a restore kit (made with wabisabi-usb): the config repo, the machine and your keys."
+    if gum confirm --default=true "Restore this machine from it?"; then
+      load_kit "$found"
+    fi
+  fi
+fi
 
 if [ -n "$ANSWERS_IN" ]; then
   [ -f "$ANSWERS_IN" ] || die "answers file '$ANSWERS_IN' does not exist."
   while IFS=$'\t' read -r k v; do set_answer "$k" "$v"; done < <(jq -r 'to_entries[] | "\(.key)\t\(.value)"' "$ANSWERS_IN")
   note "Loaded $(jq 'length' "$ANSWERS_IN") answers from $ANSWERS_IN"
 else
-  clear
+  clear 2>/dev/null || true
   gum style --border rounded --padding "1 3" --border-foreground 141 \
     "$(gum style --bold 'wabisabi')" \
     "an opinionated, libre-only Wayland desktop" \
@@ -1257,6 +1369,19 @@ fi
 # target's.
 if [ ! -L "$TARGET/etc/nixos" ]; then
   warn "/etc/nixos does not link to $REPO_PATH on the installed system; rebuild with --flake $REPO_PATH#$FLAKE_ATTR."
+fi
+
+# ── the restore kit, which holds your keys ────────────────────────────────
+
+if [ -n "$KIT_DEVICE" ]; then
+  heading "The restore kit"
+  if [ "$WIPE_KIT" = 1 ]; then
+    wipe_kit "$KIT_DEVICE" || true
+  elif [ "$ASSUME_YES" != 1 ] && gum confirm --default=true "Erase the restore kit from $KIT_DEVICE now? It holds your age key; the machine no longer needs it."; then
+    wipe_kit "$KIT_DEVICE" || true
+  else
+    warn "The restore kit is still on $KIT_DEVICE, with your keys in it. Erase it when you are done: wabisabi-usb wipe <stick>."
+  fi
 fi
 
 # ── done ──────────────────────────────────────────────────────────────────

@@ -47,6 +47,20 @@
   ...
 }:
 
+let
+  # An answers file, or a restore kit on the boot stick (`{ kitPassphrase;
+  # keep; }`, where keep is whatever the kit's answers point at and so must
+  # be in the medium's store).
+  autotestKit = autotest != null && builtins.isAttrs autotest && autotest ? kitPassphrase;
+  autotestArgs =
+    if autotestKit then
+      "--kit auto --kit-passphrase-file ${autotest.kitPassphrase} --wipe-kit"
+    else
+      "--answers ${autotest}";
+  autotestKeep = lib.optionalString autotestKit (
+    "# kept in the store for the kit: " + lib.concatMapStringsSep " " toString (autotest.keep or [ ])
+  );
+in
 {
   imports = [
     (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix")
@@ -251,8 +265,9 @@
       fi
 
       echo "WABISABI_AUTOTEST_START"
+      ${autotestKeep}
       rc=0
-      ${lib.getExe' installer "wabisabi-install"} --answers ${autotest} --yes --no-reboot || rc=$?
+      ${lib.getExe' installer "wabisabi-install"} ${autotestArgs} --yes --no-reboot || rc=$?
       if [ $rc -eq 0 ]; then
         echo "WABISABI_AUTOTEST_DONE"
       else

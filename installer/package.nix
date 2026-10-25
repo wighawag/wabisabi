@@ -42,6 +42,7 @@
   template,
   targetLock,
   secretsTool,
+  usbTool,
   stateVersion,
   nixpkgsSource,
   offline ? false,
@@ -106,6 +107,7 @@ let
       export WABISABI_LOCK=${targetLock}/flake.lock
       export WABISABI_URL=${targetLock.url}
       export WABISABI_DISKO=${./disko}
+      export WABISABI_DISKS_LIB=${./disks.sh}
       # disko evaluates its own config at runtime with `import <nixpkgs>`, and
       # a systemd unit inherits no NIX_PATH at all, so the sources travel with
       # the installer instead of being looked up in the environment.
@@ -124,6 +126,8 @@ symlinkJoin {
     emit
     # On the medium's PATH too, for `wabisabi-secrets keygen` by hand.
     secretsTool
+    # And the stick tool, to make another stick (or a kit) from a live session.
+    usbTool
   ];
   meta = {
     description = "Interactive installer for a wabisabi machine";

@@ -22,7 +22,7 @@
 #                than decorative.
 #
 # Usage:
-#   ./scripts/test-install-vm.sh [--luks] [--offline] [--restore] [--restore-fleet] [--stage N]
+#   ./scripts/test-install-vm.sh [--luks] [--offline] [--restore] [--restore-fleet] [--restore-kit] [--stage N]
 #
 # --restore installs from an existing config repo (the restore-fixture
 # output: two commits, sops secrets with the published test key) instead of
@@ -30,6 +30,10 @@
 # --restore-fleet does the same from a two-host FLEET repo shaped like
 # my-boxes (installer/test-fleet): disks declared with disko, secrets
 # encrypted to the host's SSH key, the host key placed from the repo.
+# --restore-kit restores that same fleet laptop from a RESTORE KIT instead of
+# an answers file: wabisabi-usb writes the ISO to a stick image and puts an
+# encrypted kit after it, and the VM boots FROM THAT STICK (USB, no cdrom).
+# The installer must find the kit, open it, restore, and erase it.
 #
 # The disk image is always kept afterwards, for inspection.
 set -euo pipefail
@@ -47,6 +51,9 @@ ONLY_STAGE=""
 DISK_SIZE="32G"
 TIMEOUT_INSTALL=${TIMEOUT_INSTALL:-3600}
 TIMEOUT_BOOT=${TIMEOUT_BOOT:-300}
+# RAM for the install VM, in MiB. The live system's store is tmpfs, so what
+# the install fetches and evaluates there is RAM too.
+INSTALL_MEM=${INSTALL_MEM:-8192}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,6 +61,7 @@ while [ $# -gt 0 ]; do
     --offline) VARIANT="offline"; ISO_ATTR="iso-autotest-offline"; shift ;;
     --restore) VARIANT="restore"; ISO_ATTR="iso-autotest-restore"; shift ;;
     --restore-fleet) VARIANT="restore-fleet"; ISO_ATTR="iso-autotest-restore-fleet"; shift ;;
+    --restore-kit) VARIANT="restore-kit"; ISO_ATTR="iso-autotest-restore-kit"; shift ;;
     --stage) ONLY_STAGE="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -106,7 +114,18 @@ SHOT="$WORK/$VARIANT-login.ppm"
 
 if want_stage 1; then
   say "Building the $VARIANT autotest ISO"
-  ISO_DIR=$(nix build --no-link --print-out-paths "$REPO#$ISO_ATTR")
+  if [ "$VARIANT" = restore-kit ]; then
+    # ONE evaluation for the ISO and what the kit points at: the fixture's
+    # store path depends on the tree, and building them separately lets an
+    # edit in between hand the kit a path the ISO does not carry.
+    mapfile -t built < <(nix build --no-link --print-out-paths "$REPO#$ISO_ATTR" \
+      "$REPO#restore-fleet-fixture" "$REPO#usb" "$REPO#test-kit-passphrase")
+    pick() { printf '%s\n' "${built[@]}" | grep -- "$1" | head -1; }
+    ISO_DIR=$(pick '\.iso$') FIXTURE=$(pick 'restore-fleet-fixture$')
+    USB=$(pick 'wabisabi-usb$')/bin/wabisabi-usb KITPASS=$(pick 'test-kit-passphrase$')
+  else
+    ISO_DIR=$(nix build --no-link --print-out-paths "$REPO#$ISO_ATTR")
+  fi
   ISO=$(echo "$ISO_DIR"/iso/*.iso)
   ok "$(basename "$ISO") ($(du -h "$ISO" | cut -f1))"
 
@@ -142,15 +161,39 @@ if want_stage 1; then
     net=(-netdev "user,id=net0" -device "virtio-net-pci,netdev=net0")
   fi
 
+  # THE KIT VARIANT BOOTS FROM A STICK, made the way a person makes one:
+  # wabisabi-usb writes the ISO and a kit pointing at the fleet fixture
+  # (which the autotest ISO carries in its store), on an image file.
+  if [ "$VARIANT" = restore-kit ]; then
+    say "Making the stick: the ISO, then a restore kit after it"
+    STICK="$WORK/$VARIANT-stick.img"
+    rm -f "$STICK"
+    truncate -s 4G "$STICK"
+    "$USB" write "$STICK" --iso "$ISO" --yes > "$WORK/$VARIANT-usb.log" 2>&1 \
+      || { bad "wabisabi-usb write failed:"; sed 's/^/      /' "$WORK/$VARIANT-usb.log"; exit 1; }
+    "$USB" kit "$STICK" --source "$FIXTURE" --host laptop --repo-path /home/tester/src/fleet \
+      --age-key "$REPO/installer/test-age-key.txt" --ssh-key none --passphrase-file "$KITPASS" --yes \
+      >> "$WORK/$VARIANT-usb.log" 2>&1 \
+      || { bad "wabisabi-usb kit failed:"; sed 's/^/      /' "$WORK/$VARIANT-usb.log"; exit 1; }
+    ok "stick written and kit added ($STICK)"
+    boot_media=(
+      -device "qemu-xhci,id=xhci"
+      -drive "if=none,id=stick,format=raw,file=$STICK"
+      -device "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
+    )
+  else
+    boot_media=(-cdrom "$ISO" -boot d)
+  fi
+
   say "Installing (unattended). This boots the ISO and waits for it to finish."
   echo "    log: $SERIAL"
   set +e
   timeout "$TIMEOUT_INSTALL" "$QEMU" \
-    -machine q35,accel=kvm -cpu host -m 8192 -smp 4 \
+    -machine q35,accel=kvm -cpu host -m "$INSTALL_MEM" -smp 4 \
     -drive if=pflash,format=raw,unit=0,readonly=on,file="$OVMF_CODE" \
     -drive if=pflash,format=raw,unit=1,file="$VARS" \
     -drive file="$DISK",if=virtio,format=qcow2 \
-    -cdrom "$ISO" -boot d \
+    "${boot_media[@]}" \
     "${net[@]}" \
     -display none -serial "file:$SERIAL"
   rc=$?
@@ -160,7 +203,24 @@ if want_stage 1; then
   if grep -q "WABISABI_INSTALL_OK" "$SERIAL"; then
     ok "installer reported success: $(grep -o 'WABISABI_INSTALL_OK.*' "$SERIAL" | head -1)"
 
-    if [ "$VARIANT" = restore-fleet ]; then
+    if [ "$VARIANT" = restore-kit ]; then
+      if grep -q "Restoring 'laptop' from .*as the kit says" "$SERIAL"; then
+        ok "the installer found the kit on its own stick and read its answers"
+      else
+        bad "the installer did not load the restore kit"
+      fi
+      if grep -q "WABISABI_KIT_WIPED" "$SERIAL"; then
+        ok "the installer erased the kit after the install"
+      else
+        bad "the kit was not erased"
+      fi
+      if "$USB" show "$STICK" 2>/dev/null | grep -q "No restore kit"; then
+        ok "the stick image holds no readable kit afterwards"
+      else
+        bad "the stick image still holds a kit"
+      fi
+    fi
+    if [ "$VARIANT" = restore-fleet ] || [ "$VARIANT" = restore-kit ]; then
       if grep -q "WABISABI_INSTALL_OK host=laptop user=tester layout=disko .*mode=restore" "$SERIAL"; then
         ok "restored the fleet's laptop, partitioned by its own disko declaration"
       else
@@ -207,14 +267,14 @@ if want_stage 1; then
     # The first time the key, the encrypted file and sops-nix meet: the
     # installer compares the hash activation put in /etc/shadow with the one
     # it encrypted, and only says this when they are equal.
-    if [ "$VARIANT" = restore-fleet ]; then
+    if [ "$VARIANT" = restore-fleet ] || [ "$VARIANT" = restore-kit ]; then
       : # its password is the config's own secret, checked above
     elif grep -q "from the encrypted config" "$SERIAL"; then
       ok "the login password came from the sops-encrypted config"
     else
       bad "the password did not come from the encrypted config"
     fi
-    if [ "$VARIANT" = restore-fleet ]; then
+    if [ "$VARIANT" = restore-fleet ] || [ "$VARIANT" = restore-kit ]; then
       : # the fleet repo declares no /etc/nixos link, by design
     elif grep -q "does not link to" "$SERIAL"; then
       bad "/etc/nixos is not a link on the installed system"
