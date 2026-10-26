@@ -737,6 +737,25 @@ find_kit() {
   done
 }
 
+# The FIRST thing typed on this machine may be a kit passphrase, long before
+# the config says which keyboard it has. Ask, so the passphrase means what its
+# keycaps say. This switches the live console only: it records no answer, and
+# a restore still switches to the layout the config declares before the LUKS
+# passphrase is chosen.
+early_keymap() {
+  local layout
+  [ -z "$KIT_PASSFILE" ] || return 0
+  bold "Your keyboard layout (us, gb, fr, de, ...), for typing passphrases"
+  note "The stick starts in 'us'. A restore switches to your config's layout later on its own."
+  layout=$(gum input --value us --placeholder us)
+  [ -n "$layout" ] && [ "$layout" != us ] || return 0
+  if ckbcomp "$layout" 2>/dev/null | loadkeys - 2>/dev/null; then
+    note "Console keyboard switched to '$layout' for now."
+  else
+    warn "Could not switch the console to '$layout'; it stays 'us'."
+  fi
+}
+
 load_kit() {
   local dev="$1" pass tries=0 n
   [ -b "$dev" ] || die "restore kit '$dev' is not a block device."
@@ -747,6 +766,7 @@ load_kit() {
   KIT_LOOP=$(losetup -f --show -r -o "$KIT_OFFSET" "$dev") || die "could not reach the restore kit on $dev."
 
   heading "Restore kit on $dev"
+  early_keymap
   # The passphrase never touches anything but a pipe. Traced by nothing.
   local xtrace=0
   case "$-" in *x*) xtrace=1; set +x ;; esac
@@ -1071,10 +1091,17 @@ echo
 # Only true when the options were NOT reviewed. Walking through them records
 # what you chose, including choices that match today's default, and recorded
 # values are exactly the ones that stop tracking the project.
-if [ "$reviewed" = 0 ] && [ -z "$ANSWERS_IN" ]; then
-  note "Options you did not set are left out of the config, so they keep following wabisabi."
+if [ "$install_mode" = restore ]; then
+  # Everything above came from the repo; the installer's own fresh-install
+  # defaults (firmware, early KMS, secrets mode) are never written on a
+  # restore, so listing them would only mislead.
+  :
+else
+  if [ "$reviewed" = 0 ] && [ -z "$ANSWERS_IN" ]; then
+    note "Options you did not set are left out of the config, so they keep following wabisabi."
+  fi
+  jq -r 'to_entries[] | select(.key | startswith("identity:") or startswith("disk:") | not) | "  \(.key | sub("^[a-z]+:"; "")) = \(.value)"' "$WORK/answers.json" 2>/dev/null || true
 fi
-jq -r 'to_entries[] | select(.key | startswith("identity:") or startswith("disk:") | not) | "  \(.key | sub("^[a-z]+:"; "")) = \(.value)"' "$WORK/answers.json" 2>/dev/null || true
 
 if [ "$ASSUME_YES" != 1 ]; then
   gum confirm "Install now?" || die "aborted; no disk was touched."
