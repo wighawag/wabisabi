@@ -52,6 +52,12 @@
   services.openssh.enable = true;
   sops.age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
 
+  # A DEFAULT sops file that is a DOTENV, used by no secret of this host, as
+  # in my-boxes (secrets/voice-agent.env). sops.defaultSopsFormat is left at
+  # its "yaml" default on purpose: restore once probed the key against this
+  # file read as yaml, failed, and reported the right key as the wrong one.
+  sops.defaultSopsFile = ../../secrets/fleet.env;
+
   sops.secrets."laptop/user-password" = {
     sopsFile = ../../secrets/laptop/user-password;
     format = "binary";

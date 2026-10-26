@@ -517,8 +517,12 @@ restore_prepare() {
     # throws on access rather than lacking the attribute.
     try = x: let r = builtins.tryEval x; in if r.success then r.value else null;
     defaultFile = try (toString (c.sops.defaultSopsFile or null));
-    firstFile = if secrets == [ ] then null else try (toString (builtins.head secrets).sopsFile);
     first = if secrets == [ ] then null else builtins.head secrets;
+    inDefault = builtins.filter (x: defaultFile != null && try (toString x.sopsFile) == defaultFile) secrets;
+    probe = if inDefault != [ ] then builtins.head inDefault else first;
+    extFormat = f: let m = builtins.match ".*[.]([a-z]+)$" f; e = if m == null then "" else builtins.head m; in
+      if e == "env" then "dotenv" else if e == "json" then "json" else if e == "ini" then "ini"
+      else if e == "yaml" || e == "yml" then "yaml" else "binary";
   in {
     inherit user;
     hostName = c.networking.hostName;
@@ -527,12 +531,16 @@ restore_prepare() {
     variant = c.services.xserver.xkb.variant;
     keyFile = c.sops.age.keyFile or null;
     templateSecrets = (c.wabisabi.secrets.sopsFile or null) != null;
-    # One file the given key must open: the default secrets file, else the
-    # first declared secret. Proves the key before the disk is touched.
-    probeFile = if defaultFile != null && defaultFile != "" then defaultFile
-      else if firstFile != null then firstFile else "";
-    probeFormat = if defaultFile != null && defaultFile != "" then (c.sops.defaultSopsFormat or "yaml")
-      else if first != null then first.format else "yaml";
+    # One file the given key must open, proving it before the disk is
+    # touched: a secret this host DECLARES (so activation really needs it),
+    # with the format that secret declares, preferring one in the default file.
+    # Not the default file read as sops.defaultSopsFormat: the default of that
+    # option is "yaml" whatever the file is, and a fleet whose default file
+    # is a dotenv (my-boxes) then fails as if the key were wrong.
+    probeFile = if probe != null then try (toString probe.sopsFile)
+      else if defaultFile != null && defaultFile != "" then defaultFile else "";
+    probeFormat = if probe != null then probe.format
+      else if defaultFile != null && defaultFile != "" then extFormat defaultFile else "yaml";
     passwordFromSecrets = (c.wabisabi.secrets.sopsFile or null) != null
       && (c.wabisabi.secrets.ownerPassword or false) && user != "";
     passwordDeclared = builtins.any (a: (u.${a} or null) != null)
@@ -643,7 +651,7 @@ EOF
       [ -n "$candidate" ] || continue
       valid_age_key "$candidate" || continue
       (umask 077; printf '%s\n' "$candidate" > "$WORK/age.key")
-      if restore_decrypt "$probe_file" "$probe_format" >/dev/null 2>&1; then
+      if restore_decrypt "$probe_file" "$probe_format" >/dev/null 2>"$WORK/sops.err"; then
         opened=1
         set_answer "restore:ageKey" "$candidate"
         break
@@ -654,7 +662,8 @@ EOF
       given=$(for candidate in "$key" "${RESTORE_EXTRA_KEYS[@]}"; do
         [ -n "$candidate" ] && age-keygen -y <(printf '%s\n' "$candidate") 2>/dev/null; done | sort -u | tr '\n' ' ')
       wanted=$(grep -oE 'age1[a-z0-9]{58}' "$probe_file" | sort -u | tr '\n' ' ')
-      die "the age key given does not open this repo's secrets ($probe_file). Given: ${given:-none}. That file opens with: ${wanted:-unknown}. Nothing was touched."
+      warn "sops said: $(tail -3 "$WORK/sops.err" 2>/dev/null | tr '\n' ' ')"
+      die "the age key given does not open this repo's secrets ($probe_file, read as $probe_format). Given: ${given:-none}. That file opens with: ${wanted:-unknown}. Nothing was touched."
     fi
     note "Your key opens the repo's secrets."
   fi

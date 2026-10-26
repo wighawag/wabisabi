@@ -215,6 +215,9 @@
               - path_regex: secrets/laptop/[^/]+$
                 key_groups:
                   - age: [*admin, *host_laptop]
+              - path_regex: secrets/fleet.env$
+                key_groups:
+                  - age: [*admin]
             EOF
 
             mkdir -p secrets/laptop
@@ -224,6 +227,9 @@
               --filename-override secrets/laptop/user-password $TMPDIR/hash > secrets/laptop/user-password
             sops encrypt --input-type binary --output-type binary \
               --filename-override secrets/laptop/ssh-host-key $TMPDIR/hostkey > secrets/laptop/ssh-host-key
+            printf 'FLEET_TOKEN=not-a-real-one\n' > $TMPDIR/fleet.env
+            sops encrypt --input-type dotenv --output-type dotenv \
+              --filename-override secrets/fleet.env $TMPDIR/fleet.env > secrets/fleet.env
 
             git init -q -b main
             git add -A
