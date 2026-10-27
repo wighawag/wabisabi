@@ -68,11 +68,11 @@
         "wherever": "wherever"
       },
       "locked": {
-        "lastModified": 1792994230,
-        "narHash": "sha256-n9LM5r1ND7PxjxQiGTxc7vtXWNvjQfmyymgXTXqbY90=",
+        "lastModified": 1793085715,
+        "narHash": "sha256-e2yDaZuY9WEGPl3jnvo+1IJ6I053c186vVB8eOhzSKM=",
         "owner": "wighawag",
         "repo": "nixos-modules",
-        "rev": "f55a24d81994cef7a4bd494c4f262140e2408d95",
+        "rev": "a33c1a7b81fd646ee9a3a9bebd61ad60afefc5c1",
         "type": "github"
       },
       "original": {
@@ -147,17 +147,17 @@
     "wherever": {
       "flake": false,
       "locked": {
-        "lastModified": 1792917879,
-        "narHash": "sha256-LiLp2WMWbqEl9StcDYvf68euSkX1tUYVW3eQe5STUXM=",
+        "lastModified": 1793041396,
+        "narHash": "sha256-MOHWR5F83BuaTj1Y19wIGIp7jRb0hnve27cyy+f/oi0=",
         "owner": "wighawag",
         "repo": "wherever",
-        "rev": "43f768baa69fb5c0166be91c3c80ce88fa552df9",
+        "rev": "757f682f650d10185612c44e721bb724b235e86d",
         "type": "github"
       },
       "original": {
         "owner": "wighawag",
         "repo": "wherever",
-        "rev": "43f768baa69fb5c0166be91c3c80ce88fa552df9",
+        "rev": "757f682f650d10185612c44e721bb724b235e86d",
         "type": "github"
       }
     }
